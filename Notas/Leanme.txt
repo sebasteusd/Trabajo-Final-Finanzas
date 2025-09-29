@@ -1,0 +1,11 @@
+Para la depuración del backend se usa este siguiente comando:
+python -m uvicorn app.main:app --reload
+
+Tienen que abrir el archivo desde la carpeta global, es decir se tiene que ver tanto la carpeta del front como del backend
+
+La ruta para abrir el swagger es: http://localhost:8000/docs
+
+El comando para depurar el front es: "npm run dev"
+
+Se utilizo para el backend fast apy con python, procuren tener la versión mas reciente
+Para el front se utilizo react + tailwind

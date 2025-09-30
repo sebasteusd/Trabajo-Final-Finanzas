@@ -8,7 +8,7 @@ def calcular_tasa_mensual(tasa, tipo_tasa, capitalizacion):
     else:
         raise ValueError("Tipo de tasa inválido")
 
-def generar_tabla_amortizacion(monto, tasa_mensual, plazo, cuota, periodo_gracia=0, tipo_gracia="ninguna"):
+def generar_tabla_amortizacion(monto, tasa_mensual, plazo, periodo_gracia=0, tipo_gracia="ninguna"):
     saldo = monto
     tabla = []
     
@@ -17,16 +17,23 @@ def generar_tabla_amortizacion(monto, tasa_mensual, plazo, cuota, periodo_gracia
         interes = saldo * tasa_mensual
         
         if tipo_gracia == "total":
+            # Gracia TOTAL: no se paga nada, intereses se capitalizan
             amortizacion = 0
             cuota_mes = 0
+            saldo += interes  # Capitalización de intereses
+            flujo = 0
+            
         elif tipo_gracia == "parcial":
+            # Gracia PARCIAL: solo se pagan intereses
             amortizacion = 0
             cuota_mes = interes
+            # Saldo se mantiene igual
+            flujo = -cuota_mes
         else:  # sin gracia
-            amortizacion = cuota - interes
-            cuota_mes = cuota
-            
-        saldo -= amortizacion
+            # Esto no debería ejecutarse para periodo_gracia > 0
+            amortizacion = 0
+            cuota_mes = 0
+            flujo = 0
         
         tabla.append({
             "mes": mes,
@@ -34,111 +41,100 @@ def generar_tabla_amortizacion(monto, tasa_mensual, plazo, cuota, periodo_gracia
             "interes": interes,
             "amortizacion": amortizacion,
             "saldo": max(saldo, 0),
-            "flujo": -cuota_mes
+            "flujo": flujo
         })
     
-    # Periodo de amortización
+    # Calcular cuota para el periodo de amortización
     plazo_amortizacion = plazo - periodo_gracia
+    if plazo_amortizacion > 0:
+        factor = (1 + tasa_mensual) ** plazo_amortizacion
+        cuota = (saldo * tasa_mensual * factor) / (factor - 1)
+    else:
+        cuota = 0
+    
+    # Periodo de amortización
     for mes in range(periodo_gracia + 1, plazo + 1):
         interes = saldo * tasa_mensual
         amortizacion = cuota - interes
         saldo -= amortizacion
         
+        # Ajustar última cuota si es necesario
+        cuota_ajustada = cuota
+        if mes == plazo and abs(saldo) > 0.01:
+            cuota_ajustada = interes + amortizacion + saldo
+            saldo = 0
+        
         tabla.append({
             "mes": mes,
-            "cuota": cuota,
+            "cuota": cuota_ajustada,
             "interes": interes,
             "amortizacion": amortizacion,
             "saldo": max(saldo, 0),
-            "flujo": -cuota
+            "flujo": -cuota_ajustada
         })
     
-    return tabla
-
-def calcular_cuota_amortizacion(monto, tasa_mensual, plazo_amortizacion):
-    """Calcula la cuota para el periodo de amortización (sin gracia)"""
-    if plazo_amortizacion == 0:
-        return 0
-    factor = (1 + tasa_mensual) ** plazo_amortizacion
-    cuota = (monto * tasa_mensual * factor) / (factor - 1)
-    return cuota
+    return tabla, cuota
 
 def simulate_credit(data):
-    monto_financiado = data.monto - data.bono_techo_propio
-    tasa_mensual = calcular_tasa_mensual(data.tasa, data.tipo_tasa, data.capitalizacion)
-    plazo_total = data.plazo_meses
-    
-    # Determinar periodo de gracia
-    periodo_gracia = 0
-    if data.gracia == "total":
-        periodo_gracia = 6  # o el que definas
-    elif data.gracia == "parcial":
-        periodo_gracia = 6  # o el que definas
-    
-    plazo_amortizacion = plazo_total - periodo_gracia
-    
-    # Calcular cuota según el tipo de gracia
-    if data.gracia == "total":
-        # En gracia total: cuota = 0 durante gracia, luego cuota normal
-        cuota_gracia = 0
-        cuota_amortizacion = calcular_cuota_amortizacion(monto_financiado, tasa_mensual, plazo_amortizacion)
-        cuota_final = cuota_amortizacion
+    try:
+        # Calcular monto financiado
+        monto_financiado = data.monto - data.bono_techo_propio
+        tasa_mensual = calcular_tasa_mensual(data.tasa, data.tipo_tasa, data.capitalizacion)
+        plazo_total = data.plazo_meses
         
-    elif data.gracia == "parcial":
-        # En gracia parcial: cuota = solo intereses durante gracia, luego cuota normal
-        cuota_gracia = monto_financiado * tasa_mensual
-        cuota_amortizacion = calcular_cuota_amortizacion(monto_financiado, tasa_mensual, plazo_amortizacion)
-        cuota_final = cuota_amortizacion
-        
-    else:  # sin gracia
-        cuota_gracia = 0
-        cuota_amortizacion = calcular_cuota_amortizacion(monto_financiado, tasa_mensual, plazo_total)
-        cuota_final = cuota_amortizacion
+        # Determinar periodo de gracia
         periodo_gracia = 0
-    
-    # Generar tabla de amortización completa
-    tabla = generar_tabla_amortizacion(
-        monto_financiado, 
-        tasa_mensual, 
-        plazo_total, 
-        cuota_amortizacion,  # cuota para amortización
-        periodo_gracia, 
-        data.gracia
-    )
-    
-    # Agregar flujo inicial
-    tabla.insert(0, {
-        "mes": 0,
-        "cuota": 0.0,
-        "interes": 0.0,
-        "amortizacion": 0.0,
-        "saldo": monto_financiado,
-        "flujo": monto_financiado  # El cliente RECIBE el dinero
-    })
-    
-    # Construir flujo para VAN/TIR
-    flujo = construir_flujo_cliente(monto_financiado, data.bono_techo_propio, tabla, data.gracia, periodo_gracia)
-    van, tir = calcular_van_tir(flujo, tasa_descuento_mensual=tasa_mensual)
-    
-    # Calcular totales
-    total_pagado = sum(fila["cuota"] for fila in tabla[1:])
-    intereses_pagados = sum(fila["interes"] for fila in tabla[1:])
-    
-    return {
-        "cuota_mensual": round(cuota_final, 2),
-        "total_pagado": round(total_pagado, 2),
-        "intereses_pagados": round(intereses_pagados, 2),
-        "tabla_amortizacion": [
-            {
-                "mes": fila["mes"],
-                "cuota": round(fila["cuota"], 2),
-                "interes": round(fila["interes"], 2),
-                "amortizacion": round(fila["amortizacion"], 2),
-                "saldo": round(fila["saldo"], 2),
-                "flujo": round(fila["flujo"], 2),
-            }
-            for fila in tabla
-        ],
-        "van_cliente": van,
-        "tir_cliente": tir
-    }
+        if data.gracia == "total":
+            periodo_gracia = 6  # 6 meses de gracia total
+        elif data.gracia == "parcial":
+            periodo_gracia = 6  # 6 meses de gracia parcial
+        
+        # Generar tabla de amortización completa
+        tabla, cuota_final = generar_tabla_amortizacion(
+            monto_financiado, 
+            tasa_mensual, 
+            plazo_total, 
+            periodo_gracia, 
+            data.gracia
+        )
+        
+        # Agregar flujo inicial (mes 0)
+        tabla.insert(0, {
+            "mes": 0,
+            "cuota": 0.0,
+            "interes": 0.0,
+            "amortizacion": 0.0,
+            "saldo": monto_financiado,
+            "flujo": monto_financiado  # El cliente RECIBE el dinero
+        })
+        
+        # Construir flujo para VAN/TIR (SOLO 2 argumentos ahora)
+        flujo = construir_flujo_cliente(monto_financiado, data.bono_techo_propio, tabla)
+        van, tir = calcular_van_tir(flujo, tasa_descuento_mensual=tasa_mensual)
+        
+        # Calcular totales
+        total_pagado = sum(fila["cuota"] for fila in tabla[1:])
+        intereses_pagados = sum(fila["interes"] for fila in tabla[1:])
+        
+        return {
+            "cuota_mensual": round(cuota_final, 2) if periodo_gracia < plazo_total else 0,
+            "total_pagado": round(total_pagado, 2),
+            "intereses_pagados": round(intereses_pagados, 2),
+            "tabla_amortizacion": [
+                {
+                    "mes": fila["mes"],
+                    "cuota": round(fila["cuota"], 2),
+                    "interes": round(fila["interes"], 2),
+                    "amortizacion": round(fila["amortizacion"], 2),
+                    "saldo": round(fila["saldo"], 2),
+                    "flujo": round(fila["flujo"], 2),
+                }
+                for fila in tabla
+            ],
+            "van_cliente": van,
+            "tir_cliente": tir
+        }
+        
+    except Exception as e:
+        print(f"Error en simulate_credit: {e}")
+        raise

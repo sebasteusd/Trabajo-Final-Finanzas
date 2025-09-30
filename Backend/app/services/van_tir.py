@@ -1,9 +1,10 @@
 import numpy_financial as npf
 import math
 
-def construir_flujo_cliente(monto: float, bono: float, tabla: list, tipo_gracia: str, periodo_gracia: int) -> list:
+def construir_flujo_cliente(monto: float, bono: float, tabla: list) -> list:
     """
     Construye el flujo de caja desde la perspectiva del cliente
+    Versión simplificada - solo necesita la tabla completa
     """
     flujo = [monto]  # Mes 0: el cliente RECIBE el dinero
     

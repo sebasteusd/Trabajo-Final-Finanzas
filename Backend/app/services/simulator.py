@@ -1,12 +1,65 @@
 from app.services.van_tir import construir_flujo_cliente, calcular_van_tir
 
 def calcular_tasa_mensual(tasa, tipo_tasa, capitalizacion):
+    """
+    Calcula la tasa mensual efectiva según el tipo de tasa y capitalización
+    """
     if tipo_tasa == "efectiva":
+        # Tasa Efectiva Anual -> Convertir a mensual
         return (1 + tasa / 100) ** (1 / 12) - 1
+        
     elif tipo_tasa == "nominal":
-        return (tasa / 100) / capitalizacion
+        if capitalizacion is None:
+            raise ValueError("Para tasa nominal se requiere capitalización")
+        
+        # Convertir la capitalización a días para cálculo estándar
+        dias_por_año = 360  # Base financiera común
+        
+        if capitalizacion == "diaria":
+            periodos_por_año = 360
+        elif capitalizacion == "quincenal":
+            periodos_por_año = 24
+        elif capitalizacion == "mensual":
+            periodos_por_año = 12
+        elif capitalizacion == "bimestral":
+            periodos_por_año = 6
+        elif capitalizacion == "trimestral":
+            periodos_por_año = 4
+        elif capitalizacion == "cuatrimestral":
+            periodos_por_año = 3
+        elif capitalizacion == "semestral":
+            periodos_por_año = 2
+        elif capitalizacion == "anual":
+            periodos_por_año = 1
+        else:
+            raise ValueError(f"Capitalización no soportada: {capitalizacion}")
+        
+        # Tasa nominal -> Primero a tasa del periodo, luego a mensual
+        tasa_periodo = (tasa / 100) / periodos_por_año
+        
+        # Convertir a tasa mensual efectiva
+        # Si la capitalización es mensual o menor, usar fórmula directa
+        if capitalizacion == "mensual":
+            return tasa_periodo
+        elif capitalizacion in ["diaria", "quincenal"]:
+            # Para capitalizaciones más frecuentes que mensual
+            if capitalizacion == "diaria":
+                dias_por_periodo = 1
+            elif capitalizacion == "quincenal":
+                dias_por_periodo = 15
+            
+            # Convertir a tasa mensual: (1 + tasa_diaria)^30 - 1
+            dias_por_mes = 30
+            tasa_mensual = (1 + tasa_periodo) ** (dias_por_mes / dias_por_periodo) - 1
+            return tasa_mensual
+        else:
+            # Para capitalizaciones mayores a mensual
+            # Primero convertir a efectiva anual, luego a mensual
+            tasa_efectiva_anual = (1 + tasa_periodo) ** periodos_por_año - 1
+            return (1 + tasa_efectiva_anual) ** (1/12) - 1
+            
     else:
-        raise ValueError("Tipo de tasa inválido")
+        raise ValueError("Tipo de tasa inválido. Use 'efectiva' o 'nominal'")
 
 def generar_tabla_amortizacion(monto, tasa_mensual, plazo, periodo_gracia=0, tipo_gracia="ninguna"):
     saldo = monto
@@ -77,6 +130,10 @@ def generar_tabla_amortizacion(monto, tasa_mensual, plazo, periodo_gracia=0, tip
 
 def simulate_credit(data):
     try:
+        # Validar datos para tasa nominal
+        if data.tipo_tasa == "nominal" and data.capitalizacion is None:
+            raise ValueError("Para tasa nominal se requiere especificar la capitalización")
+        
         # Calcular monto financiado
         monto_financiado = data.monto - data.bono_techo_propio
         tasa_mensual = calcular_tasa_mensual(data.tasa, data.tipo_tasa, data.capitalizacion)
@@ -108,7 +165,7 @@ def simulate_credit(data):
             "flujo": monto_financiado  # El cliente RECIBE el dinero
         })
         
-        # Construir flujo para VAN/TIR (SOLO 2 argumentos ahora)
+        # Construir flujo para VAN/TIR
         flujo = construir_flujo_cliente(monto_financiado, data.bono_techo_propio, tabla)
         van, tir = calcular_van_tir(flujo, tasa_descuento_mensual=tasa_mensual)
         
@@ -120,6 +177,7 @@ def simulate_credit(data):
             "cuota_mensual": round(cuota_final, 2) if periodo_gracia < plazo_total else 0,
             "total_pagado": round(total_pagado, 2),
             "intereses_pagados": round(intereses_pagados, 2),
+            "tasa_mensual_efectiva": round(tasa_mensual * 100, 6),  # Para debug
             "tabla_amortizacion": [
                 {
                     "mes": fila["mes"],

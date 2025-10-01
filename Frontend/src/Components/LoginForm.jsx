@@ -34,39 +34,58 @@ export default function LoginForm({ onLogin }) {
   };
 
   return (
-    <form
-      onSubmit={handleSubmit}
-      className="bg-white shadow-md rounded-lg p-6 max-w-md mx-auto mt-10"
-    >
-      <h2 className="text-xl font-semibold text-sky-700 mb-4 text-center">
-        Acceso al Simulador
-      </h2>
+    <div className="flex items-center justify-center p-4">
+      <div className="bg-white shadow-xl rounded-lg p-8 max-w-md w-full">
+        <h2 className="text-2xl font-semibold text-gray-700 mb-2 text-center">
+          Iniciar Sesión
+        </h2>
+        <p className="text-center text-gray-500 mb-6">
+          Accede al sistema profesional de análisis de bonos
+        </p>
 
-      <div className="space-y-4">
-        <input
-          name="username"
-          type="text"
-          placeholder="Usuario"
-          value={form.username}
-          onChange={handleChange}
-          className="w-full border rounded px-3 py-2"
-        />
-        <input
-          name="password"
-          type="password"
-          placeholder="Contraseña"
-          value={form.password}
-          onChange={handleChange}
-          className="w-full border rounded px-3 py-2"
-        />
-        {error && <p className="text-red-500 text-sm">{error}</p>}
-        <button
-          type="submit"
-          className="w-full bg-sky-600 hover:bg-sky-700 text-white font-semibold py-2 rounded transition"
-        >
-          Iniciar sesión
-        </button>
+        <form onSubmit={handleSubmit} className="space-y-6">
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Usuario:
+              </label>
+              <input
+                name="username"
+                type="text"
+                placeholder="Ingrese su usuario"
+                value={form.username}
+                onChange={handleChange}
+                className="w-full border border-gray-300 rounded-full px-4 py-3 bg-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Contraseña:
+              </label>
+              <input
+                name="password"
+                type="password"
+                placeholder="Ingrese su contraseña"
+                value={form.password}
+                onChange={handleChange}
+                className="w-full border border-gray-300 rounded-full px-4 py-3 bg-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+            </div>
+          </div>
+
+          {error && <p className="text-red-500 text-sm text-center">{error}</p>}
+
+          <div className="pt-4">
+            <button
+              type="submit"
+              className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-full transition duration-200 transform hover:scale-105"
+            >
+              INICIAR SESIÓN
+            </button>
+          </div>
+        </form>
       </div>
-    </form>
+    </div>
   );
 }

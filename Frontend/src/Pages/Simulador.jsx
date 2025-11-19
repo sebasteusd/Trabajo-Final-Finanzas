@@ -2,10 +2,9 @@ import { useState } from "react";
 import CreditForm from "../Components/CreditForm";
 import Results from "../Components/Results";
 import AmortizationTable from "../Components/AmortizacionTable";
-import Logo from "../assets/logo.png";
-import { HomeIcon, ChartIcon } from "../assets/icons";
+import { ChartIcon } from "../assets/icons";
 
-export default function Simulador({ user, token, onLogout, onBackToWelcome, onChangeView, view, users }) {
+export default function Simulador({ user, token, view, users }) {
   const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -37,87 +36,10 @@ export default function Simulador({ user, token, onLogout, onBackToWelcome, onCh
     }
   };
 
-  const handleBackToWelcome = () => {
-    if (onBackToWelcome) {
-      onBackToWelcome();
-    } else {
-      // Fallback si no hay función disponible
-      window.location.reload();
-    }
-  };
-
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
-      {/* Navbar */}
-      <nav className="bg-white/90 backdrop-blur-sm shadow-sm border-b">
-        <div className="container mx-auto px-6 py-4">
-          <div className="flex justify-between items-center">
-            <div className="flex items-center space-x-3">
-              <img
-                src={Logo}
-                alt="Logo CREDIFÁCIL"
-                className="w-12 h-12 rounded-full shadow-lg object-cover"
-              />
-              <div>
-                <h1 className="text-2xl font-bold text-gray-800">CREDIFÁCIL</h1>
-                <p className="text-sm text-gray-600">Simulador de Créditos</p>
-              </div>
-            </div>
-            <div className="flex items-center space-x-4">
-              <span className="text-sm text-gray-600">
-                <span className="font-semibold">{user.username}</span>
-                <span className="text-xs bg-gray-200 px-2 py-1 rounded-full ml-2">
-                  {user.role}
-                </span>
-              </span>
-              
-              {/* Navegación entre vistas */}
-              <div className="flex space-x-2">
-                <button
-                  onClick={() => onChangeView("tsa")}
-                  className={`px-4 py-2 rounded-lg font-semibold transition-colors ${
-                    view === "tsa"
-                      ? "bg-blue-600 text-white"
-                      : "bg-gray-200 text-gray-700 hover:bg-gray-300"
-                  }`}
-                >
-                  Simulador
-                </button>
-                
-                {user.role === "admin" && (
-                  <button
-                    onClick={() => onChangeView("users")}
-                    className={`px-4 py-2 rounded-lg font-semibold transition-colors ${
-                      view === "users"
-                        ? "bg-blue-600 text-white"
-                        : "bg-gray-200 text-gray-700 hover:bg-gray-300"
-                    }`}
-                  >
-                    Usuarios
-                  </button>
-                )}
-              </div>
 
-              <button
-                onClick={handleBackToWelcome}
-                className="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg font-semibold transition-colors"
-              >
-                Volver a Inicio
-              </button>
-              
-              <button
-                onClick={onLogout}
-                className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg font-semibold transition-colors"
-              >
-                Cerrar Sesión
-              </button>
-            </div>
-          </div>
-        </div>
-      </nav>
-
-      {/* Contenido Principal */}
-      <div className="container mx-auto px-6 py-8">
+      <div className="max-w-[1700px] mx-auto px-6 py-4">
         {view === "tsa" && (
           <>
             {/* Header de la sección */}
@@ -137,14 +59,14 @@ export default function Simulador({ user, token, onLogout, onBackToWelcome, onCh
               </div>
             )}
 
-            <div className="grid lg:grid-cols-3 gap-8">
+            <div className="grid lg:grid-cols-6 gap-4">
               {/* Formulario */}
-              <div className="lg:col-span-1">
+              <div className="lg:col-span-2">
                 <CreditForm onSimulate={simulateCredit} loading={loading} />
               </div>
 
               {/* Resultados */}
-              <div className="lg:col-span-2">
+              <div className="lg:col-span-4">   
                 {loading ? (
                   <div className="bg-white rounded-xl shadow-lg p-8 text-center">
                     <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>

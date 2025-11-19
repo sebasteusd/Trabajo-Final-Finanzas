@@ -13,7 +13,7 @@ export default function LoginForm({ onLogin }) {
     setError("");
 
     try {
-      // El backend espera form-data estilo x-www-form-urlencoded
+
       const body = new URLSearchParams();
       body.append("username", form.username);
       body.append("password", form.password);
@@ -27,7 +27,7 @@ export default function LoginForm({ onLogin }) {
       if (!res.ok) throw new Error("Credenciales inválidas");
 
       const data = await res.json();
-      onLogin(data.access_token); // Guardar el token en el  localStorage
+      onLogin(data.access_token); 
     } catch (err) {
       setError(err.message);
     }

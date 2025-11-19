@@ -2,15 +2,20 @@ import { useState } from "react";
 import { CreditIcon, BonoIcon, RocketIcon, ReportIcon, AlertIcon, CheckIcon } from "../assets/icons";
 
 export default function CreditForm({ onSimulate, loading }) {
-  const [form, setForm] = useState({
+const [form, setForm] = useState({
     monto: 100000,
     tasa: 8.5,
     tipo_tasa: "efectiva",
-    capitalizacion: "mensual", // Cambiado a string con valor por defecto
+    capitalizacion: "mensual",
     plazo_meses: 240,
     moneda: "PEN",
     gracia: "ninguna",
-    bono_techo_propio: 0
+    bono_techo_propio: 0,
+    
+    frecuencia_pago: "mensual", 
+    pct_seguro_desgravamen_anual: 0.3, 
+    seguro_bien_monto: 20, 
+    portes_monto: 5 
   });
 
   const handleChange = (e) => {
@@ -18,17 +23,21 @@ export default function CreditForm({ onSimulate, loading }) {
     setForm({ ...form, [name]: value });
   };
 
-  const handleSubmit = (e) => {
+const handleSubmit = (e) => {
     e.preventDefault();
     const payload = {
       ...form,
       monto: parseFloat(form.monto),
       tasa: parseFloat(form.tasa),
       plazo_meses: parseInt(form.plazo_meses),
-      // Para tasa nominal: enviar capitalización como string
-      // Para tasa efectiva: enviar null
       capitalizacion: form.tipo_tasa === "nominal" ? form.capitalizacion : null,
-      bono_techo_propio: parseFloat(form.bono_techo_propio)
+      bono_techo_propio: parseFloat(form.bono_techo_propio),
+      
+      // --- AÑADIR NUEVOS CAMPOS AL PAYLOAD ---
+      frecuencia_pago: form.frecuencia_pago,
+      pct_seguro_desgravamen_anual: parseFloat(form.pct_seguro_desgravamen_anual),
+      seguro_bien_monto: parseFloat(form.seguro_bien_monto),
+      portes_monto: parseFloat(form.portes_monto)
     };
     onSimulate(payload);
   };
@@ -108,7 +117,7 @@ export default function CreditForm({ onSimulate, loading }) {
                 value={form.tasa} 
                 onChange={handleChange}
                 min="0"
-                step="0.1"
+                step="0.0001"
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500" 
                 placeholder="8.5"
               />
@@ -177,6 +186,29 @@ export default function CreditForm({ onSimulate, loading }) {
               </p>
             </div>
 
+            {/* --- NUEVO: FRECUENCIA DE PAGO --- */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Frecuencia de Pago
+              </label>
+              <select 
+                name="frecuencia_pago" 
+                value={form.frecuencia_pago} 
+                onChange={handleChange}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              >
+                <option value="diaria">Diaria</option>
+                <option value="quincenal">Quincenal</option>
+                <option value="mensual">Mensual</option>
+                <option value="bimestral">Bimestral</option>
+                <option value="trimestral">Trimestral</option>
+                <option value="cuatrimestral">Cuatrimestral</option>
+                <option value="semestral">Semestral</option>
+                <option value="anual">Anual</option>
+              </select>
+            </div>
+            {/* --- FIN NUEVO --- */}
+
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Periodo de Gracia
@@ -214,6 +246,66 @@ export default function CreditForm({ onSimulate, loading }) {
             </div>
           </div>
         </div>
+
+        {/* --- NUEVO: COSTOS ADICIONALES --- */}
+        <div className="bg-gray-50 p-4 rounded-lg">
+          <h3 className="text-lg font-medium text-gray-800 mb-4">Costos Adicionales</h3>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            
+            {/* Seguro de Desgravamen */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Seg. Desgravamen
+              </label>
+              <input 
+                name="pct_seguro_desgravamen_anual" 
+                type="number" 
+                value={form.pct_seguro_desgravamen_anual} 
+                onChange={handleChange}
+                min="0"
+                step="0.000001"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500" 
+              />
+            </div>
+
+            {/* Seguro del Bien */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Seguro del Inmueble
+              </label>
+              <input 
+                name="seguro_bien_monto" 
+                type="number" 
+                value={form.seguro_bien_monto} 
+                onChange={handleChange}
+                min="0"
+                step="1"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500" 
+              />
+            </div>
+            
+            {/* Portes */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Portes / Gastos
+              </label>
+              <input 
+                name="portes_monto" 
+                type="number" 
+                value={form.portes_monto} 
+                onChange={handleChange}
+                min="0"
+                step="1"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500" 
+              />
+            </div>
+
+          </div>
+          <p className="text-xs text-gray-500 mt-2">
+            Ingresa los costos mensuales. El backend los ajustará automáticamente si la frecuencia de pago no es mensual.
+          </p>
+        </div>
+        {/* --- FIN NUEVO --- */}
 
         {/* Bono y financiamiento */}
         <div className="bg-green-50 p-4 rounded-lg border border-green-200">

@@ -1,8 +1,7 @@
-import { ChartIcon, IdeaIcon} from "../assets/icons";
-
+import { ChartIcon, IdeaIcon } from "../assets/icons";
 import { useState } from "react";
 
-export default function AmortizationTable({ tabla }) {
+export default function AmortizationTable({ tabla, frecuencia = "mensual" }) {
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(12);
   const [showAll, setShowAll] = useState(false);
@@ -10,16 +9,32 @@ export default function AmortizationTable({ tabla }) {
   if (!tabla || tabla.length === 0) return null;
 
   const formatCurrency = (value) => {
+
+    const val = Object.is(value, -0) ? 0 : value;
     return `S/ ${new Intl.NumberFormat('es-PE', {
       minimumFractionDigits: 2,
       maximumFractionDigits: 2
-    }).format(value)}`;
+    }).format(val)}`;
   };
 
-  const totalPages = Math.ceil(tabla.length / itemsPerPage);
+
+
+  const dataRows = tabla.slice(1);
+
+  const totalItems = tabla.length;
+
+  const totalPages = Math.ceil(totalItems / itemsPerPage);
   const startIndex = (currentPage - 1) * itemsPerPage;
   const endIndex = startIndex + itemsPerPage;
+
   const currentData = showAll ? tabla : tabla.slice(startIndex, endIndex);
+
+
+  const totalCuotas = dataRows.length;
+
+  const totalPagado = dataRows.reduce((sum, row) => sum + row.cuota_total, 0);
+  const totalIntereses = dataRows.reduce((sum, row) => sum + row.interes, 0);
+  const totalAmortizacion = dataRows.reduce((sum, row) => sum + row.amortizacion, 0);
 
   const goToPage = (page) => {
     setCurrentPage(Math.max(1, Math.min(page, totalPages)));
@@ -29,6 +44,9 @@ export default function AmortizationTable({ tabla }) {
     const isEvenRow = index % 2 === 0;
     return `${isEvenRow ? 'bg-white' : 'bg-gray-50'} hover:bg-blue-50 transition-colors`;
   };
+
+
+  const TIPO_PERIODO = frecuencia.charAt(0).toUpperCase() + frecuencia.slice(1);
 
   return (
     <div className="bg-white rounded-xl shadow-lg p-6">
@@ -40,6 +58,7 @@ export default function AmortizationTable({ tabla }) {
           <h2 className="text-xl font-semibold text-gray-800">Tabla de Amortización</h2>
         </div>
         
+
         <div className="flex items-center space-x-4">
           <div className="flex items-center space-x-2">
             <label className="text-sm text-gray-600">Mostrar:</label>
@@ -51,6 +70,7 @@ export default function AmortizationTable({ tabla }) {
                 setShowAll(false);
               }}
               className="px-2 py-1 border border-gray-300 rounded text-sm"
+              disabled={showAll}
             >
               <option value={12}>12</option>
               <option value={24}>24</option>
@@ -68,71 +88,102 @@ export default function AmortizationTable({ tabla }) {
         </div>
       </div>
 
-      {/* Resumen */}
+
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6 p-4 bg-gray-50 rounded-lg">
         <div className="text-center">
-          <p className="text-sm text-gray-600">Total Cuotas</p>
-          <p className="text-lg font-bold text-blue-600">{tabla.length}</p>
+          <p className="text-sm text-gray-600">Total Períodos</p>
+          <p className="text-lg font-bold text-blue-600">{totalCuotas}</p>
         </div>
         <div className="text-center">
           <p className="text-sm text-gray-600">Total Pagado</p>
           <p className="text-lg font-bold text-green-600">
-            {formatCurrency(tabla.reduce((sum, row) => sum + row.cuota, 0))}
+            {formatCurrency(totalPagado)}
           </p>
         </div>
         <div className="text-center">
           <p className="text-sm text-gray-600">Total Intereses</p>
           <p className="text-lg font-bold text-orange-600">
-            {formatCurrency(tabla.reduce((sum, row) => sum + row.interes, 0))}
+            {formatCurrency(totalIntereses)}
           </p>
         </div>
         <div className="text-center">
-          <p className="text-sm text-gray-600">Capital Pagado</p>
+          <p className="text-sm text-gray-600">Total Amortizado</p>
           <p className="text-lg font-bold text-purple-600">
-            {formatCurrency(tabla.reduce((sum, row) => sum + row.amortizacion, 0))}
+            {formatCurrency(totalAmortizacion)}
           </p>
         </div>
       </div>
 
-      {/* Tabla */}
+      {/* --- Tabla --- */}
       <div className="overflow-x-auto rounded-lg border border-gray-200">
         <table className="min-w-full">
           <thead className="bg-gradient-to-r from-blue-600 to-purple-600 text-white">
             <tr>
-              <th className="px-4 py-3 text-left text-sm font-semibold">Mes</th>
-              <th className="px-4 py-3 text-right text-sm font-semibold">Cuota</th>
-              <th className="px-4 py-3 text-right text-sm font-semibold">Interés</th>
-              <th className="px-4 py-3 text-right text-sm font-semibold">Capital</th>
-              <th className="px-4 py-3 text-right text-sm font-semibold">Saldo</th>
-              <th className="px-4 py-3 text-right text-sm font-semibold">Flujo</th>
+              <th className="px-4 py-3 text-left text-sm font-semibold sticky left-0 bg-blue-600">{TIPO_PERIODO}</th>
+              <th className="px-4 py-3 text-right text-sm font-semibold whitespace-nowrap">Cuota</th>
+              <th className="px-4 py-3 text-right text-sm font-semibold whitespace-nowrap">Interés</th>
+              <th className="px-4 py-3 text-right text-sm font-semibold whitespace-nowrap">Amortización</th>
+              <th className="px-4 py-3 text-right text-sm font-semibold whitespace-nowrap">Seg. Desg</th>
+              <th className="px-4 py-3 text-right text-sm font-semibold whitespace-nowrap">Seg. Bien</th>
+              <th className="px-4 py-3 text-right text-sm font-semibold whitespace-nowrap">Portes</th>
+              <th className="px-4 py-3 text-right text-sm font-semibold whitespace-nowrap">Saldo</th>
+              <th className="px-4 py-3 text-right text-sm font-semibold whitespace-nowrap">Flujo</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-200">
             {currentData.map((fila, index) => (
-              <tr key={fila.mes} className={getRowClass(index)}>
-                <td className="px-4 py-3">
+              <tr key={fila.periodo} className={getRowClass(index)}>
+                
+                {/* Columna de Período*/}
+                <td className="px-4 py-3 sticky left-0" style={{ backgroundColor: index % 2 === 0 ? 'white' : '#F9FAFB' }}>
                   <div className="flex items-center">
                     <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded-full text-xs font-semibold mr-2">
-                      {fila.mes}
+                      {fila.periodo}
                     </span>
                     <span className="text-sm text-gray-600">
-                      Año {Math.ceil(fila.mes / 12)}
+                      {fila.periodo === 0 ? "Desembolso" : `Período ${fila.periodo}`}
                     </span>
                   </div>
                 </td>
-                <td className="px-4 py-3 text-right font-semibold text-blue-600">
-                  {formatCurrency(fila.cuota)}
+                
+                
+                {/* Cuota (P+I) */}
+                <td className="px-4 py-3 text-right text-gray-700 whitespace-nowrap">
+                  {formatCurrency(fila.cuota_credito_pi)}
                 </td>
-                <td className="px-4 py-3 text-right text-orange-600">
+
+                {/* Interés */}
+                <td className="px-4 py-3 text-right text-orange-600 whitespace-nowrap">
                   {formatCurrency(fila.interes)}
                 </td>
-                <td className="px-4 py-3 text-right text-purple-600">
+                
+                {/* Amortización (Capital) */}
+                <td className="px-4 py-3 text-right text-purple-600 whitespace-nowrap">
                   {formatCurrency(fila.amortizacion)}
                 </td>
-                <td className="px-4 py-3 text-right font-medium">
+                
+                {/* Seguro Desgravamen */}
+                <td className="px-4 py-3 text-right text-gray-500 whitespace-nowrap">
+                  {formatCurrency(fila.seguro_desgravamen)}
+                </td>
+                
+                {/* Seguro Bien */}
+                <td className="px-4 py-3 text-right text-gray-500 whitespace-nowrap">
+                  {formatCurrency(fila.seguro_bien)}
+                </td>
+                
+                {/* Portes */}
+                <td className="px-4 py-3 text-right text-gray-500 whitespace-nowrap">
+                  {formatCurrency(fila.portes)}
+                </td>
+                
+                {/* Saldo */}
+                <td className="px-4 py-3 text-right font-medium whitespace-nowrap">
                   {formatCurrency(fila.saldo)}
                 </td>
-                <td className={`px-4 py-3 text-right font-medium ${
+                
+                {/* Flujo */}
+                <td className={`px-4 py-3 text-right font-medium whitespace-nowrap ${
                   fila.flujo >= 0 ? 'text-green-600' : 'text-red-600'
                 }`}>
                   {fila.flujo >= 0 
@@ -146,11 +197,11 @@ export default function AmortizationTable({ tabla }) {
         </table>
       </div>
 
-      {/* Paginación */}
+      {/* --- Paginación --- */}
       {!showAll && totalPages > 1 && (
         <div className="flex items-center justify-between mt-6">
           <div className="text-sm text-gray-600">
-            Mostrando {startIndex + 1} a {Math.min(endIndex, tabla.length)} de {tabla.length} cuotas
+            Mostrando {startIndex + 1} a {Math.min(endIndex, totalItems)} de {totalItems} filas
           </div>
           
           <div className="flex items-center space-x-2">
@@ -162,6 +213,7 @@ export default function AmortizationTable({ tabla }) {
               Anterior
             </button>
             
+            {/* Lógica de botones de página */}
             <div className="flex space-x-1">
               {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
                 let pageNum;
@@ -202,21 +254,24 @@ export default function AmortizationTable({ tabla }) {
         </div>
       )}
 
-      {/* Leyenda */}
+      {/* --- Leyenda Actualizada  --- */}
       <div className="mt-6 p-4 bg-blue-50 rounded-lg border border-blue-200">
-      <div className="flex items-center mb-2 space-x-2 text-blue-800">
-        <IdeaIcon width={18} height={18} fill="#afd81dff" />
-        <h4 className="font-semibold">Interpretación de los datos:</h4>
+        <div className="flex items-center mb-2 space-x-2 text-blue-800">
+          <IdeaIcon width={18} height={18} fill="#afd81dff" />
+          <h4 className="font-semibold">Interpretación de los datos:</h4>
+        </div>
+        <div className="grid md:grid-cols-2 gap-2 text-sm text-blue-700">
+          {/* Definición de "Cuota Total" eliminada */}
+          <div><strong>Cuota (P+I):</strong> Suma de Interés + Amortización</div>
+          <div><strong>Interés:</strong> Ganancia de la entidad financiera</div>
+          <div><strong>Amortización:</strong> Parte que reduce tu deuda</div>
+          <div><strong>Seg. Desgrav.:</strong> Seguro de vida sobre el saldo</div>
+          <div><strong>Seg. Bien:</strong> Seguro sobre el inmueble</div>
+          <div><strong>Portes:</strong> Gastos administrativos</div>
+          <div><strong>Saldo:</strong> Deuda pendiente después del pago</div>
+          <div><strong>Flujo:</strong> Movimiento de efectivo</div>
+        </div>
       </div>
-      <div className="grid md:grid-cols-2 gap-2 text-sm text-blue-700">
-        <div><strong>Cuota:</strong> Pago mensual total</div>
-        <div><strong>Interés:</strong> Parte que va para la entidad financiera</div>
-        <div><strong>Capital:</strong> Parte que reduce tu deuda</div>
-        <div><strong>Saldo:</strong> Deuda pendiente después del pago</div>
-        <div><strong>Flujo:</strong> Movimiento de efectivo (negativo = pago)</div>
-        <div><strong>Año:</strong> Año correspondiente al mes de pago</div>
-      </div>
-    </div>
     </div>
   );
 }

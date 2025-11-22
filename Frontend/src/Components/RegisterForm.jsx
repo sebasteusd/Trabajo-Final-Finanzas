@@ -238,12 +238,12 @@ export default function RegisterForm({ onRegister }) {
 
             <div className="md:col-span-2">
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Información Socioeconómica:
+                Ingresos Mensuales:
               </label>
               <input
                 name="info_socieconomico"
                 type="text"
-                placeholder="Ingrese información socioeconómica"
+                placeholder="Ingrese Ingresos Mensuales"
                 value={form.info_socieconomico}
                 onChange={handleChange}
                 className="w-full border border-gray-300 rounded-full px-4 py-3 bg-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"

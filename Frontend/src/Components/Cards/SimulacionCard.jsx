@@ -1,47 +1,76 @@
+import React from 'react';
+import { RocketIcon } from "../../assets/icons";
 
+const SimulacionCard = ({ 
+  id = "000001", 
+  fecha = "07/12/2024", 
+  monto = 750000, 
+  tipoCredito = "Mi Vivienda", 
+  categoria = "Casa",
+  onDelete,
+  onViewDetails 
+}) => {
 
-const SimulacionCard = () => {
+  const formatCurrency = (value) => {
+    return new Intl.NumberFormat('es-PE', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2, 
+    }).format(value);
+  };
+
   return (
-    <div className="bg-white rounded-xl shadow-lg p-6 max-w-sm mx-auto my-8">
-      <div className="flex justify-between items-center mb-4">
-        <button className="bg-blue-100 text-blue-800 px-4 py-2 rounded-lg font-semibold">
-          Casa
-        </button>
-        <button className="bg-red-500 text-white px-4 py-2 rounded-lg font-semibold">
-          Eliminar Simulación
-        </button>
-      </div>
-
-      <div className="mb-4">
-        <p className="text-lg font-semibold text-gray-800">Simulación #000001</p>
-        <p className="text-sm text-gray-500">Realizada el 07/12/2024</p>
-      </div>
-
-      <hr className="border-t border-gray-300 my-4" />
-
-      <div className="mb-6">
-        <p className="text-gray-700 text-base">
-          Credito de{' '}
-          <span className="text-green-600 font-bold text-lg">S/ 750,000.000</span>
-        </p>
-        <p className="text-blue-600 font-semibold text-base">Credito Mi Vivienda</p>
-      </div>
-
-      <button className="w-full bg-blue-600 text-white py-3 rounded-lg flex items-center justify-center space-x-2 font-semibold text-lg">
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          className="h-6 w-6 transform rotate-45"
-          fill="none"
-          viewBox="0 0 24 24"
-          stroke="currentColor"
+    <div className="font-['Poppins'] bg-white rounded-[24px] shadow-[0_5px_30px_-10px_rgba(0,0,0,0.1)] p-5 w-full max-w-[300px] mx-auto border border-gray-100 transition-transform hover:scale-[1.01]">
+      
+      {/* Header: Categoría y Botón Eliminar con ESTILOS DE PROPIEDADCARD */}
+      <div className="flex justify-between items-center mb-4 gap-2">
+        
+        {/* Etiqueta Categoría (Estilo idéntico a PropiedadCard) */}
+        <div className="bg-[#DBEafe] px-4 py-1.5 rounded-full flex items-center justify-center">
+          <span className="text-xs sm:text-sm font-semibold text-[#1E40AF]">
+            {categoria}
+          </span>
+        </div>
+        
+        {/* Botón Eliminar (Misma tipografía y padding, color rojo de alerta) */}
+        <button 
+          onClick={(e) => {
+             e.stopPropagation();
+             onDelete();
+          }}
+          className="bg-[#EF5350] hover:bg-red-600 text-white px-4 py-1.5 rounded-full text-xs sm:text-sm font-semibold transition-colors duration-200"
         >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={2}
-            d="M6 12L3 7l3-5 5 3 5-3 3 5-3 5-5 3-5-3-3 5 3 7z"
-          />
-        </svg>
+          Eliminar
+        </button>
+      </div>
+
+      {/* Info */}
+      <div className="mb-3 space-y-0.5">
+        <div className="text-lg font-bold text-slate-700 flex items-center gap-1.5">
+          Simulación <span className="text-slate-500">#{id}</span>
+        </div>
+        <div className="text-sm font-bold text-slate-500 flex items-center gap-1.5">
+          Realizada el <span>{fecha}</span>
+        </div>
+      </div>
+
+      <hr className="border-t-2 border-slate-200 my-4" />
+
+      {/* Detalles Financieros */}
+      <div className="mb-8 space-y-1">
+        <div className="text-base font-bold text-slate-800 flex items-center flex-wrap">
+          Crédito de <span className="text-[#00C853] ml-1.5 text-lg">S/ {formatCurrency(monto)}</span>
+        </div>
+        <div className="text-base font-bold text-slate-800 flex items-center">
+          Crédito <span className="text-blue-600 ml-1.5">{tipoCredito}</span>
+        </div>
+      </div>
+
+      {/* Botón Ver Detalles */}
+      <button 
+        onClick={onViewDetails}
+        className="w-full bg-[#1A65EB] hover:bg-blue-700 text-white py-3 rounded-xl flex items-center justify-center gap-2 font-bold text-sm shadow-md hover:shadow-lg transition-all duration-300"
+      >
+        <RocketIcon width={20} height={20} fill="#FFFFFF" />
         <span>Ver Detalles</span>
       </button>
     </div>

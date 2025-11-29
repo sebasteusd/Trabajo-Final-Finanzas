@@ -1,52 +1,144 @@
-import { useState } from "react";
-import { CreditIcon, BonoIcon, RocketIcon, ReportIcon, AlertIcon, CheckIcon } from "../assets/icons";
+import { useState, useEffect } from "react";
+import { CreditIcon, RocketIcon, IdeaIcon } from "../assets/icons"; 
+
+// Asegúrate que este puerto coincida con tu backend (FastAPI por defecto es 8000)
+const API_URL = "http://localhost:8000"; 
 
 export default function CreditForm({ onSimulate, loading }) {
-const [form, setForm] = useState({
-    monto: 100000,
+  // Estado para almacenar las entidades que vienen del Backend
+  const [entidades, setEntidades] = useState([]);
+
+  const [form, setForm] = useState({
+    valor_inmueble: 125000,
+    porcentaje_inicial: 20,
+    
+    entidad_financiera: "", // Nombre de la entidad seleccionada
+    
     tasa: 8.5,
     tipo_tasa: "efectiva",
     capitalizacion: "mensual",
     plazo_meses: 240,
-    moneda: "PEN",
+    moneda: "PEN", 
+    tipo_cambio: 3.75, 
     gracia: "ninguna",
     bono_techo_propio: 0,
     
     frecuencia_pago: "mensual", 
-    pct_seguro_desgravamen_anual: 0.3, 
+    pct_seguro_desgravamen_anual: 0.05, 
     seguro_bien_monto: 20, 
-    portes_monto: 5 
+    portes_monto: 5,
+    cok: 15
   });
+
+  // --- 1. CARGAR DATOS DEL BACKEND AL INICIAR ---
+  useEffect(() => {
+    const fetchEntidades = async () => {
+      try {
+        // Nota: Agregamos "/api" a la ruta para coincidir con tu main.py
+        const response = await fetch(`${API_URL}/api/financial/entities`);
+        if (response.ok) {
+          const data = await response.json();
+          setEntidades(data);
+        } else {
+          console.error("Error al cargar entidades financieras");
+        }
+      } catch (error) {
+        console.error("Error de conexión con el servidor:", error);
+      }
+    };
+    fetchEntidades();
+  }, []);
+
+  // --- CÁLCULOS AUTOMÁTICOS ---
+  const montoInicial = form.valor_inmueble * (form.porcentaje_inicial / 100);
+  const montoPrestamo = form.valor_inmueble - montoInicial;
+  const montoAFinanciarNeto = montoPrestamo - form.bono_techo_propio;
 
   const handleChange = (e) => {
     const { name, value } = e.target;
     setForm({ ...form, [name]: value });
   };
 
-const handleSubmit = (e) => {
+  // --- 2. LÓGICA DE SELECCIÓN DE ENTIDAD (ACTUALIZADA) ---
+  const handleEntidadChange = (e) => {
+    const nombreSeleccionado = e.target.value;
+    
+    if (nombreSeleccionado === "") {
+        // Opción: Omitir / Personalizado
+        setForm({ 
+            ...form, 
+            entidad_financiera: "" 
+            // Mantenemos los valores actuales para edición manual
+        });
+    } else {
+        // Buscamos la entidad en el array cargado del backend
+        const entidad = entidades.find(e => e.nombre === nombreSeleccionado);
+        
+        if (entidad) {
+            // --- CONVERSIONES ---
+            // 1. Tasa: Backend (0.095) -> Frontend (9.5)
+            const tasaPct = (entidad.tasa_referencial * 100).toFixed(2);
+            
+            // 2. Desgravamen: Backend (Mensual Decimal) -> Frontend (Anual Porcentual)
+            // Ejemplo: 0.00066 * 12 meses * 100% = 0.792% anual
+            const desgravamenAnualPct = (entidad.seguro_desgravamen * 12 * 100).toFixed(4);
+
+            // 3. Seguro Bien: Backend (Factor Mensual) -> Frontend (Monto Fijo)
+            // Ejemplo: 125000 * 0.00026 = 32.50
+            const seguroBienCalculado = (form.valor_inmueble * entidad.seguro_inmueble).toFixed(2);
+
+            setForm({ 
+                ...form, 
+                entidad_financiera: nombreSeleccionado,
+                tasa: tasaPct,
+                pct_seguro_desgravamen_anual: desgravamenAnualPct,
+                seguro_bien_monto: seguroBienCalculado,
+                portes_monto: entidad.gastos_administrativos
+            });
+        }
+    }
+  };
+
+  const handleSubmit = (e) => {
     e.preventDefault();
+    
+    // Si no se seleccionó ninguna entidad de la lista, enviamos "Personalizado"
+    const nombreFinal = form.entidad_financiera || "Personalizado";
+
     const payload = {
       ...form,
-      monto: parseFloat(form.monto),
+      monto: parseFloat(montoPrestamo), 
+      entidad_financiera: nombreFinal,
       tasa: parseFloat(form.tasa),
       plazo_meses: parseInt(form.plazo_meses),
       capitalizacion: form.tipo_tasa === "nominal" ? form.capitalizacion : null,
       bono_techo_propio: parseFloat(form.bono_techo_propio),
-      
-      // --- AÑADIR NUEVOS CAMPOS AL PAYLOAD ---
       frecuencia_pago: form.frecuencia_pago,
       pct_seguro_desgravamen_anual: parseFloat(form.pct_seguro_desgravamen_anual),
       seguro_bien_monto: parseFloat(form.seguro_bien_monto),
-      portes_monto: parseFloat(form.portes_monto)
+      portes_monto: parseFloat(form.portes_monto),
+      cok: parseFloat(form.cok) || 0,
+      tipo_cambio: parseFloat(form.tipo_cambio)
     };
     onSimulate(payload);
   };
 
   const formatNumber = (value) => {
-    return new Intl.NumberFormat('es-PE').format(value);
+    return new Intl.NumberFormat('es-PE', { maximumFractionDigits: 2 }).format(value);
   };
 
-  const financedAmount = (form.monto || 0) - (form.bono_techo_propio || 0);
+  const currencySymbol = form.moneda === "PEN" ? "S/" : "US$";
+
+  const getConvertedValue = (amount) => {
+    if (!form.tipo_cambio || form.tipo_cambio <= 0) return "";
+    if (form.moneda === "PEN") {
+      const inUSD = amount / form.tipo_cambio;
+      return `≈ US$ ${formatNumber(inUSD)}`;
+    } else {
+      const inPEN = amount * form.tipo_cambio;
+      return `≈ S/ ${formatNumber(inPEN)}`;
+    }
+  };
 
   return (
     <div className="bg-white rounded-xl shadow-lg p-6">
@@ -58,96 +150,218 @@ const handleSubmit = (e) => {
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-6">
-        {/* Información básica */}
-        <div className="bg-gray-50 p-4 rounded-lg">
-          <h3 className="text-lg font-medium text-gray-800 mb-4">Información Básica</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        
+        {/* --- ESTRUCTURA DEL PRÉSTAMO --- */}
+        <div className="bg-blue-50 p-4 rounded-lg border border-blue-100">
+          <h3 className="text-lg font-medium text-blue-900 mb-4 flex items-center">
+             <IdeaIcon width={20} height={20} fill="#1e3a8a" className="mr-2" />
+             Estructura de Financiamiento
+          </h3>
+          
+          <div className="space-y-4">
+            {/* 1. Valor del Inmueble */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Monto del Inmueble
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Valor del Inmueble
               </label>
               <div className="relative">
                 <input 
-                  name="monto" 
+                  name="valor_inmueble" 
                   type="number" 
-                  value={form.monto} 
+                  value={form.valor_inmueble} 
                   onChange={handleChange}
                   min="0"
-                  step="1000"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500" 
-                  placeholder="100,000"
+                  step="0.01"
+                  className="w-full pl-3 pr-10 py-2 border border-blue-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 font-bold text-gray-800" 
                 />
-                <span className="absolute right-3 top-2 text-gray-500 text-sm">
-                  {form.moneda === "PEN" ? "S/" : "US$"}
+                <span className="absolute right-3 top-2 text-gray-500 text-sm font-bold">
+                  {currencySymbol}
                 </span>
               </div>
-              <p className="text-xs text-gray-500 mt-1">
-                Valor total: {form.moneda === "PEN" ? "S/" : "US$"} {formatNumber(form.monto)}
+              <p className="text-xs text-blue-600 text-right mt-1 font-medium">
+                {getConvertedValue(form.valor_inmueble)}
               </p>
             </div>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Moneda
-              </label>
-              <select 
-                name="moneda" 
-                value={form.moneda} 
-                onChange={handleChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              >
-                <option value="PEN">🇵🇪 Soles Peruanos (PEN)</option>
-                <option value="USD">🇺🇸 Dólares Americanos (USD)</option>
-              </select>
+            {/* 2. Cuota Inicial */}
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  % Cuota Inicial
+                </label>
+                <div className="relative">
+                  <input 
+                    name="porcentaje_inicial" 
+                    type="number" 
+                    value={form.porcentaje_inicial} 
+                    onChange={handleChange}
+                    min="0"
+                    max="90"
+                    className="w-full pl-3 pr-8 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500" 
+                  />
+                  <span className="absolute right-3 top-2 text-gray-500 text-sm">%</span>
+                </div>
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Monto Inicial
+                </label>
+                <div className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg text-gray-600 font-medium text-right">
+                  {currencySymbol} {formatNumber(montoInicial)}
+                </div>
+              </div>
+            </div>
+
+            {/* 3. Monto del Préstamo */}
+            <div className="pt-2 border-t border-blue-200 mt-2">
+              <div className="flex justify-between items-center">
+                <span className="text-sm font-bold text-blue-900">Monto del Préstamo:</span>
+                <div className="text-right">
+                  <span className="block text-xl font-bold text-blue-700">
+                    {currencySymbol} {formatNumber(montoPrestamo)}
+                  </span>
+                  <span className="text-xs text-blue-500 font-medium">
+                    {getConvertedValue(montoPrestamo)}
+                  </span>
+                </div>
+              </div>
             </div>
           </div>
         </div>
 
-        {/* Configuración de tasa */}
+        {/* --- NUEVA SECCIÓN: ENTIDAD FINANCIERA (DINÁMICA) --- */}
         <div className="bg-gray-50 p-4 rounded-lg">
-          <h3 className="text-lg font-medium text-gray-800 mb-4">Configuración de Tasa</h3>
+           <h3 className="text-lg font-medium text-gray-800 mb-4">Entidad Financiera</h3>
+           <div>
+             <label className="block text-sm font-medium text-gray-700 mb-2">
+               Seleccionar Entidad
+             </label>
+             <select 
+               name="entidad_financiera"
+               value={form.entidad_financiera}
+               onChange={handleEntidadChange}
+               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+             >
+               <option value="">-- Omitir (Ingresar tasa manual) --</option>
+               
+               {/* Mapeamos el estado "entidades" que viene del backend */}
+               {entidades.map((entidad) => (
+                 <option key={entidad.id_entidad || entidad.nombre} value={entidad.nombre}>
+                   {entidad.nombre}
+                 </option>
+               ))}
+             </select>
+           </div>
+        </div>
+
+        {/* --- CONDICIONES FINANCIERAS --- */}
+        <div className="bg-gray-50 p-4 rounded-lg">
+          <h3 className="text-lg font-medium text-gray-800 mb-4">Condiciones Financieras</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            
+            {/* Moneda */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Tasa de Interés (%)
+              <label className="block text-sm font-medium text-gray-700 mb-2">Moneda del Préstamo</label>
+              <select 
+                name="moneda" 
+                value={form.moneda} 
+                onChange={handleChange}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="PEN">🇵🇪 Soles (PEN)</option>
+                <option value="USD">🇺🇸 Dólares (USD)</option>
+              </select>
+            </div>
+
+            {/* TIPO DE CAMBIO */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2 flex justify-between">
+                <span>Tipo de Cambio</span>
+                <span className="text-xs text-blue-600 bg-blue-50 px-2 py-0.5 rounded">Referencial</span>
               </label>
+              <div className="relative">
+                <input 
+                  name="tipo_cambio" 
+                  type="number" 
+                  value={form.tipo_cambio} 
+                  onChange={handleChange}
+                  step="0.001"
+                  className="w-full pl-3 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500" 
+                />
+                <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
+                  <span className="text-gray-400 text-sm">S/</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Plazo */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Plazo (Meses)</label>
+              <input 
+                name="plazo_meses" 
+                type="number" 
+                value={form.plazo_meses} 
+                onChange={handleChange}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500" 
+              />
+            </div>
+
+            {/* Tasa */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Tasa Interés (%)</label>
               <input 
                 name="tasa" 
                 type="number" 
                 value={form.tasa} 
                 onChange={handleChange}
-                min="0"
-                step="0.0001"
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500" 
-                placeholder="8.5"
+                step="0.01"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500" 
               />
             </div>
 
+            {/* Tipo Tasa */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Tipo de Tasa
-              </label>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Tipo de Tasa</label>
               <select 
                 name="tipo_tasa" 
                 value={form.tipo_tasa} 
                 onChange={handleChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
               >
                 <option value="efectiva">Efectiva Anual</option>
                 <option value="nominal">Nominal Anual</option>
               </select>
             </div>
 
+            {/* Frecuencia de Pago */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Frecuencia Pago</label>
+              <select 
+                name="frecuencia_pago" 
+                value={form.frecuencia_pago} 
+                onChange={handleChange}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="diaria">Diaria</option>
+                <option value="quincenal">Quincenal</option>
+                <option value="mensual">Mensual</option>
+                <option value="bimestral">Bimestral</option>
+                <option value="trimestral">Trimestral</option>
+                <option value="cuatrimestral">Cuatrimestral</option>
+                <option value="semestral">Semestral</option>
+                <option value="anual">Anual</option>
+              </select>
+            </div>
+
             {form.tipo_tasa === "nominal" && (
               <div className="md:col-span-2">
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Capitalización
-                </label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Capitalización</label>
                 <select 
                   name="capitalizacion" 
                   value={form.capitalizacion} 
                   onChange={handleChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg"
                 >
                   <option value="diaria">Diaria</option>
                   <option value="quincenal">Quincenal</option>
@@ -163,91 +377,7 @@ const handleSubmit = (e) => {
           </div>
         </div>
 
-        {/* Términos del crédito */}
-        <div className="bg-gray-50 p-4 rounded-lg">
-          <h3 className="text-lg font-medium text-gray-800 mb-4">Términos del Crédito</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Plazo en Meses
-              </label>
-              <input 
-                name="plazo_meses" 
-                type="number" 
-                value={form.plazo_meses} 
-                onChange={handleChange}
-                min="1"
-                max="360"
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500" 
-                placeholder="240"
-              />
-              <p className="text-xs text-gray-500 mt-1">
-                {Math.round(form.plazo_meses / 12)} años y {form.plazo_meses % 12} meses
-              </p>
-            </div>
-
-            {/* --- NUEVO: FRECUENCIA DE PAGO --- */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Frecuencia de Pago
-              </label>
-              <select 
-                name="frecuencia_pago" 
-                value={form.frecuencia_pago} 
-                onChange={handleChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              >
-                <option value="diaria">Diaria</option>
-                <option value="quincenal">Quincenal</option>
-                <option value="mensual">Mensual</option>
-                <option value="bimestral">Bimestral</option>
-                <option value="trimestral">Trimestral</option>
-                <option value="cuatrimestral">Cuatrimestral</option>
-                <option value="semestral">Semestral</option>
-                <option value="anual">Anual</option>
-              </select>
-            </div>
-            {/* --- FIN NUEVO --- */}
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Periodo de Gracia
-              </label>
-              <select 
-                name="gracia" 
-                value={form.gracia} 
-                onChange={handleChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              >
-                <option value="ninguna">Sin periodo de gracia</option>
-                <option value="parcial">Gracia parcial (solo intereses)</option>
-                <option value="total">Gracia total (capitalización)</option>
-              </select>
-              <div className="text-xs text-gray-500 mt-1 space-y-1">
-                {form.gracia === "parcial" && (
-                  <div className="flex items-center space-x-2">
-                    <ReportIcon width={16} height={16} stroke="currentColor" />
-                    <span>Solo pagas intereses durante la gracia</span>
-                  </div>
-                )}
-                {form.gracia === "total" && (
-                  <div className="flex items-center space-x-2">
-                    <AlertIcon width={16} height={16} stroke="currentColor" />
-                    <span>No pagas nada, intereses se capitalizan</span>
-                  </div>
-                )}
-                {form.gracia === "ninguna" && (
-                  <div className="flex items-center space-x-2">
-                    <CheckIcon width={16} height={16} stroke="currentColor" />
-                    <span>Pagas capital e intereses desde el inicio</span>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* --- NUEVO: COSTOS ADICIONALES --- */}
+                {/* Costos Adicionales */}
         <div className="bg-gray-50 p-4 rounded-lg">
           <h3 className="text-lg font-medium text-gray-800 mb-4">Costos Adicionales</h3>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -255,7 +385,7 @@ const handleSubmit = (e) => {
             {/* Seguro de Desgravamen */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Seg. Desgravamen
+                Seg. Desgravamen (%)
               </label>
               <input 
                 name="pct_seguro_desgravamen_anual" 
@@ -279,7 +409,7 @@ const handleSubmit = (e) => {
                 value={form.seguro_bien_monto} 
                 onChange={handleChange}
                 min="0"
-                step="1"
+                step="0.01"
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500" 
               />
             </div>
@@ -295,7 +425,7 @@ const handleSubmit = (e) => {
                 value={form.portes_monto} 
                 onChange={handleChange}
                 min="0"
-                step="1"
+                step="0.01"
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500" 
               />
             </div>
@@ -305,60 +435,50 @@ const handleSubmit = (e) => {
             Ingresa los costos mensuales. El backend los ajustará automáticamente si la frecuencia de pago no es mensual.
           </p>
         </div>
-        {/* --- FIN NUEVO --- */}
 
-        {/* Bono y financiamiento */}
-        <div className="bg-green-50 p-4 rounded-lg border border-green-200">
-          <h3 className="text-lg font-medium text-gray-800 mb-4 flex items-center">
-            <BonoIcon width={28} height={28} fill="#079b1bff" />
-            Bono Techo Propio
-          </h3>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Monto del Bono ({form.moneda === "PEN" ? "S/" : "US$"})
-            </label>
-            <input 
-              name="bono_techo_propio" 
-              type="number" 
-              value={form.bono_techo_propio} 
-              onChange={handleChange}
-              min="0"
-              max={form.monto}
-              step="1000"
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500" 
-              placeholder="0"
-            />
-            <div className="bg-white p-3 rounded-lg mt-3 border border-green-300">
-              <div className="flex justify-between text-sm">
-                <span className="text-gray-600">Valor del inmueble:</span>
-                <span className="font-semibold">
-                  {form.moneda === "PEN" ? "S/" : "US$"} {formatNumber(form.monto)}
-                </span>
+        {/* Bono y Periodo de Gracia */}
+        <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+           <h3 className="text-lg font-medium text-gray-800 mb-4">Beneficios y Periodos</h3>
+           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+             <div>
+               <label className="block text-sm font-medium text-gray-700 mb-2">Periodo de Gracia</label>
+               <select name="gracia" value={form.gracia} onChange={handleChange} className="w-full px-3 py-2 border border-gray-300 rounded-lg">
+                 <option value="ninguna">Sin periodo de gracia</option>
+                 <option value="parcial">Gracia parcial (Paga Interés)</option>
+                 <option value="total">Gracia total (Capitaliza)</option>
+               </select>
+             </div>
+             <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Bono Techo Propio</label>
+                <input name="bono_techo_propio" type="number" value={form.bono_techo_propio} onChange={handleChange} className="w-full px-3 py-2 border border-gray-300 rounded-lg" />
+             </div>
+           </div>
+           
+           {/* Resumen Final de Capital */}
+           <div className="mt-4 p-3 bg-white border border-green-200 rounded-lg text-sm shadow-sm">
+              <div className="flex justify-between mb-1 text-gray-600">
+                 <span>Monto Préstamo Inicial:</span>
+                 <span>{currencySymbol} {formatNumber(montoPrestamo)}</span>
               </div>
-              <div className="flex justify-between text-sm">
-                <span className="text-gray-600">Bono Techo Propio:</span>
-                <span className="font-semibold text-green-600">
-                  - {form.moneda === "PEN" ? "S/" : "US$"} {formatNumber(form.bono_techo_propio)}
-                </span>
+              <div className="flex justify-between mb-1 text-green-600 font-medium">
+                 <span>- Bono Techo Propio:</span>
+                 <span>{currencySymbol} {formatNumber(form.bono_techo_propio)}</span>
               </div>
-              <hr className="my-2" />
-              <div className="flex justify-between text-base">
-                <span className="font-semibold text-gray-800">Monto a financiar:</span>
-                <span className="font-bold text-blue-600">
-                  {form.moneda === "PEN" ? "S/" : "US$"} {formatNumber(financedAmount)}
-                </span>
+              <div className="border-t pt-2 mt-2 flex justify-between items-center">
+                 <span className="font-bold text-gray-800">Capital Final a Financiar:</span>
+                 <div className="text-right">
+                    <span className="block font-bold text-blue-700 text-lg">{currencySymbol} {formatNumber(montoAFinanciarNeto)}</span>
+                    <span className="text-xs text-blue-500 font-medium">{getConvertedValue(montoAFinanciarNeto)}</span>
+                 </div>
               </div>
-            </div>
-          </div>
+           </div>
         </div>
 
         <button
           type="submit"
           disabled={loading}
-          className={`w-full py-3 rounded-lg font-semibold text-white transition-colors ${
-            loading
-              ? "bg-gray-400 cursor-not-allowed"
-              : "bg-blue-600 hover:bg-blue-700 shadow-lg hover:shadow-xl"
+          className={`w-full py-3 rounded-lg font-semibold text-white transition-all transform hover:scale-[1.02] ${
+            loading ? "bg-gray-400 cursor-not-allowed" : "bg-gradient-to-r from-blue-600 to-indigo-700 hover:from-blue-700 hover:to-indigo-800 shadow-lg"
           }`}
         >
           {loading ? (

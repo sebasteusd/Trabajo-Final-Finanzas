@@ -7,8 +7,8 @@ from urllib.parse import quote_plus
 #  CONFIGURACIÓN PARA AUTENTICACIÓN DE SQL SERVER  
 # =================================================================
 
-SERVER = "DESKTOP-AOQKD98\SQLEXPRESS"
-DATABASE = "MiViviendaDB"
+SERVER = "DESKTOP-AOQKD98"
+DATABASE = "CrediFacilDB"
 USERNAME = "sebasteusdDB"  
 PASSWORD = "123" 
 

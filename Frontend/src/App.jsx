@@ -2,20 +2,21 @@ import { useState, useEffect } from "react";
 import Home from "./Pages/Home";
 import Welcome from "./Pages/Welcome";
 import Simulador from "./Pages/Simulador";
-import MisSimulaciones from "./Pages/MisSimulaciones"; // <--- IMPORTACIÓN NUEVA
+import MisSimulaciones from "./Pages/MisSimulaciones"; 
 import Navbar from "./Components/Navbar";
+import Oportunities from "./Pages/Oportunities"; 
+import Favoritos from "./Pages/Favoritos"; 
+import MiPerfil from "./Pages/MiPerfil"; // 1. IMPORTAR MI PERFIL
 
 export default function App() {
   const [token, setToken] = useState(null);
   const [user, setUser] = useState(null);
 
   const [view, setView] = useState("tsa"); 
-  const [users, setUsers] = useState([]);
-
-  // Estados posibles: 'home', 'welcome', 'simulador', 'simulations'
+  
+  // Estados posibles: 'home', 'welcome', 'simulador', 'simulations', 'users', 'favorites', 'profile'
   const [currentPage, setCurrentPage] = useState("home"); 
 
-  // Local storage keys
   const LS_TOKEN = "tf_token";
   const LS_VIEW = "tf_view";
   const LS_PAGE = "tf_currentPage";
@@ -30,12 +31,19 @@ export default function App() {
           if (!res.ok) throw new Error("Error al obtener usuario");
           const data = await res.json();
           setUser(data.usuario);
-          setCurrentPage("welcome");
-          setView("welcome");
-          // persist sensible defaults after login
+          
+          const storedPage = localStorage.getItem(LS_PAGE);
+          const storedView = localStorage.getItem(LS_VIEW);
+          
+          if (storedPage && storedPage !== "home") {
+             setCurrentPage(storedPage);
+             setView(storedView || "welcome");
+          } else {
+             setCurrentPage("welcome");
+             setView("welcome");
+          }
+
           try { localStorage.setItem(LS_TOKEN, token); } catch (err) { console.warn("localStorage set error", err); }
-          try { localStorage.setItem(LS_VIEW, "welcome"); } catch (err) { console.warn("localStorage set error", err); }
-          try { localStorage.setItem(LS_PAGE, "welcome"); } catch (err) { console.warn("localStorage set error", err); }
         } catch (err) {
           console.error(err);
           setToken(null);
@@ -47,21 +55,17 @@ export default function App() {
     fetchUser();
   }, [token]);
 
-  // On mount: restore token/view/page from localStorage if available
+  // Restore token
   useEffect(() => {
     try {
       const storedToken = localStorage.getItem(LS_TOKEN);
-      const storedView = localStorage.getItem(LS_VIEW);
-      const storedPage = localStorage.getItem(LS_PAGE);
       if (storedToken) setToken(storedToken);
-      if (storedView) setView(storedView);
-      if (storedPage) setCurrentPage(storedPage);
     } catch (err) {
       console.warn("localStorage read error", err);
     }
   }, []);
 
-  // Persist view and currentPage when they change
+  // Persist state
   useEffect(() => {
     try { if (view) localStorage.setItem(LS_VIEW, view); } catch (err) { console.warn("localStorage set error", err); }
   }, [view]);
@@ -69,24 +73,6 @@ export default function App() {
   useEffect(() => {
     try { if (currentPage) localStorage.setItem(LS_PAGE, currentPage); } catch (err) { console.warn("localStorage set error", err); }
   }, [currentPage]);
-
-  useEffect(() => {
-    const fetchUsers = async () => {
-      if (user?.role === "admin" && view === "users") {
-        try {
-          const res = await fetch("http://localhost:8000/api/auth/users", {
-            headers: { Authorization: `Bearer ${token}` },
-          });
-          if (!res.ok) throw new Error("Error al obtener usuarios");
-          const data = await res.json();
-          setUsers(data);
-        } catch (err) {
-          console.error(err);
-        }
-      }
-    };
-    fetchUsers();
-  }, [user, view, token]);
 
   const handleLogin = (newToken) => {
     setToken(newToken);
@@ -98,17 +84,31 @@ export default function App() {
     setView("tsa"); 
   };
 
-  // --- LÓGICA ACTUALIZADA PARA NAVEGACIÓN ---
+  // --- LÓGICA DE NAVEGACIÓN ACTUALIZADA ---
   const handleViewChange = (newView) => {
     if (newView === "welcome") {
       setCurrentPage("welcome");
       setView("welcome");
+    
     } else if (newView === "simulations") {
-      // Nueva condición para ir al historial (acepta ambas keys)
       setCurrentPage("simulations");
       setView("simulations");
+      
+    } else if (newView === "users") { 
+      setCurrentPage("users"); 
+      setView("users");
+      
+    } else if (newView === "favorites") { 
+      setCurrentPage("favorites");
+      setView("favorites");
+
+    } else if (newView === "profile") { 
+      // 2. NUEVA LÓGICA PARA PERFIL
+      setCurrentPage("profile");
+      setView("profile");
+
     } else {
-      // Cualquier otra vista se asume que es interna del Simulador
+      // El resto (tsa) sigue yendo al Layout del Simulador
       setCurrentPage("simulador");
       setView(newView);
     }
@@ -124,20 +124,14 @@ export default function App() {
     try { localStorage.removeItem(LS_PAGE); } catch (err) { console.warn("localStorage remove error", err); }
   };
 
-  // ------------------------------------
-  // Renderizado Condicional
-  // ------------------------------------
-
-  // 1. Home / Login
   if (!token || currentPage === "home") {
     return <Home onLogin={handleLogin} />;
   }
-  // After login: show a single Navbar in App and render pages below it
+
   return (
     <>
       <Navbar user={user} view={view} onChangeView={handleViewChange} onLogout={handleLogout} />
 
-      {/* 2. Welcome Page */}
       {currentPage === "welcome" && (
         <Welcome
           user={user}
@@ -146,7 +140,6 @@ export default function App() {
         />
       )}
 
-      {/* 3. Mis Simulaciones */}
       {currentPage === "simulations" && (
         <MisSimulaciones
           user={user}
@@ -155,7 +148,26 @@ export default function App() {
         />
       )}
 
-      {/* 4. Simulador Page */}
+      {currentPage === "users" && (
+        <Oportunities token={token} />
+      )}
+
+      {currentPage === "favorites" && (
+        <Favoritos 
+            user={user}
+            token={token}
+            onNavigateToSimulator={handleNavigateToSimulator}
+        />
+      )}
+
+      {/* 3. RENDERIZADO DE LA PÁGINA PERFIL */}
+      {currentPage === "profile" && (
+        <MiPerfil 
+            user={user}
+            token={token}
+        />
+      )}
+
       {currentPage === "simulador" && (
         <Simulador
           user={user}
@@ -163,7 +175,7 @@ export default function App() {
           onLogout={handleLogout}
           onChangeView={handleViewChange}
           view={view}
-          users={users}
+          users={[]} 
         />
       )}
     </>

@@ -1,62 +1,7 @@
 import math
+from .van_tir import calcular_tasa_mensual, calcular_van_interno, calcular_tir_interno
 
-# --- 1. FUNCIÓN DE CÁLCULO DE TASA MENSUAL (TEM) ---
-
-def calcular_tasa_mensual(tasa, tipo_tasa, capitalizacion):
-    """
-    Calcula la tasa mensual efectiva (TEM) según el tipo de tasa y capitalización.
-    """
-    if tipo_tasa == "efectiva":
-        # Tasa Efectiva Anual -> Convertir a mensual
-        tasa_efectiva_anual = tasa / 100
-        return (1 + tasa_efectiva_anual) ** (1 / 12) - 1
-        
-    elif tipo_tasa == "nominal":
-        if capitalizacion is None:
-            raise ValueError("Para tasa nominal se requiere capitalización")
-        
-        tasa_nominal_anual = tasa / 100
-        
-        if capitalizacion == "diaria":
-            periodos_por_año = 360
-        elif capitalizacion == "quincenal":
-            periodos_por_año = 24
-        elif capitalizacion == "mensual":
-            periodos_por_año = 12
-        elif capitalizacion == "bimestral":
-            periodos_por_año = 6
-        elif capitalizacion == "trimestral":
-            periodos_por_año = 4
-        elif capitalizacion == "cuatrimestral":
-            periodos_por_año = 3
-        elif capitalizacion == "semestral":
-            periodos_por_año = 2
-        elif capitalizacion == "anual":
-            periodos_por_año = 1
-        else:
-            raise ValueError(f"Capitalización no soportada: {capitalizacion}")
-        
-        # 1. Calcular la Tasa del Período
-        tasa_periodo = tasa_nominal_anual / periodos_por_año
-        
-        # Caso especial: Si capitaliza mensual, la tasa de período ES la tasa mensual.
-        if capitalizacion == "mensual":
-            return tasa_periodo
-        
-        # Para TODAS las demás capitalizaciones (diaria, trimestral, semestral, etc.):
-        # 2. Convertimos a Tasa Efectiva Anual (TEA)
-        tasa_efectiva_anual = (1 + tasa_periodo) ** periodos_por_año - 1
-        
-        # 3. Convertimos la TEA a Tasa Efectiva Mensual (TEM)
-        tasa_mensual_efectiva = (1 + tasa_efectiva_anual) ** (1/12) - 1
-        
-        return tasa_mensual_efectiva
-            
-    else:
-        raise ValueError("Tipo de tasa inválido. Use 'efectiva' o 'nominal'")
-
-# --- 2. FUNCIÓN DE TABLA DE AMORTIZACIÓN (POR PERÍODOS) ---
-
+# --- 1. FUNCIÓN DE TABLA DE AMORTIZACIÓN ---
 def generar_tabla_amortizacion(monto, 
                                tasa_interes_periodo, 
                                plazo_total_periodos, 
@@ -65,27 +10,25 @@ def generar_tabla_amortizacion(monto,
                                tasa_seguro_desgrav_periodo=0.0,
                                seguro_bien_periodo=0.0,
                                portes_periodo=0.0):
-    """
-    Genera la tabla de amortización basada en PERÍODOS de pago.
-    """
+    
     saldo = monto
     tabla = []
     
-    # Periodo de gracia (en períodos)
+    # Periodo de gracia
     for periodo in range(1, periodo_gracia_en_periodos + 1):
         interes = saldo * tasa_interes_periodo
         seguro_desgravamen = saldo * tasa_seguro_desgrav_periodo
         
         if tipo_gracia == "total":
             amortizacion = 0
-            cuota_credito = 0.0 # Cuota (P+I) es cero
-            saldo += interes  # Capitalización de intereses
+            cuota_credito = 0.0
+            saldo += interes
             cuota_total_periodo = seguro_desgravamen + seguro_bien_periodo + portes_periodo
-            flujo = -cuota_total_periodo
+            flujo = -cuota_total_periodo 
 
         elif tipo_gracia == "parcial":
             amortizacion = 0
-            cuota_credito = interes # Cuota (P+I) es solo el interés
+            cuota_credito = interes
             cuota_total_periodo = interes + seguro_desgravamen + seguro_bien_periodo + portes_periodo
             flujo = -cuota_total_periodo
         else: 
@@ -94,7 +37,7 @@ def generar_tabla_amortizacion(monto,
         tabla.append({
             "periodo": periodo,
             "cuota_total": cuota_total_periodo,
-            "cuota_credito": cuota_credito, # (Capital + Interés)
+            "cuota_credito": cuota_credito,
             "interes": interes,
             "amortizacion": amortizacion,
             "seguro_desgravamen": seguro_desgravamen,
@@ -104,7 +47,7 @@ def generar_tabla_amortizacion(monto,
             "flujo": flujo
         })
     
-    # Calcular cuota FIJA (Capital + Interés) para el periodo de amortización
+    # Amortización regular
     plazo_amortizacion_periodos = plazo_total_periodos - periodo_gracia_en_periodos
     cuota_credito_fija = 0.0
     
@@ -115,12 +58,10 @@ def generar_tabla_amortizacion(monto,
         else:
             cuota_credito_fija = saldo / plazo_amortizacion_periodos
     
-    # Periodo de amortización
     for periodo in range(periodo_gracia_en_periodos + 1, plazo_total_periodos + 1):
         interes = saldo * tasa_interes_periodo
         seguro_desgravamen = saldo * tasa_seguro_desgrav_periodo
         
-        # Ajuste preciso de última cuota
         if periodo == plazo_total_periodos:
             amortizacion = saldo
             cuota_credito = amortizacion + interes
@@ -129,13 +70,12 @@ def generar_tabla_amortizacion(monto,
             amortizacion = cuota_credito - interes
         
         saldo -= amortizacion
-        
         cuota_total_periodo = cuota_credito + seguro_desgravamen + seguro_bien_periodo + portes_periodo
         
         tabla.append({
             "periodo": periodo,
             "cuota_total": cuota_total_periodo,
-            "cuota_credito": cuota_credito, # (Capital + Interés)
+            "cuota_credito": cuota_credito,
             "interes": interes,
             "amortizacion": amortizacion,
             "seguro_desgravamen": seguro_desgravamen,
@@ -147,17 +87,12 @@ def generar_tabla_amortizacion(monto,
         
     return tabla, cuota_credito_fija
 
-# --- 3. FUNCIÓN PRINCIPAL DE SIMULACIÓN ---
+
+# --- 2. FUNCIÓN PRINCIPAL DE SIMULACIÓN ---
 
 def simulate_credit(data):
-    """
-    Simula un crédito con diferentes frecuencias de pago y costos.
-    'data' es un objeto o diccionario con todos los parámetros.
-    """
     try:
-        # Mapa de frecuencias de pago (en días y meses equivalentes, base 30/360)
         FRECUENCIAS_PAGO = {
-            # "nombre": (días_por_periodo, meses_por_periodo)
             "diaria": (1, 1/30),
             "quincenal": (15, 0.5),
             "mensual": (30, 1),
@@ -168,82 +103,89 @@ def simulate_credit(data):
             "anual": (360, 12)
         }
         
-        # --- 1. Obtener datos de entrada ---
-        # Asumimos que 'data' es un objeto que permite acceso tipo 'data.monto'
         monto_financiado = data.monto - data.bono_techo_propio
         plazo_total_meses = data.plazo_meses
-        
-        # Obtener frecuencia de pago del objeto data, default a "mensual"
         frecuencia_str = getattr(data, "frecuencia_pago", "mensual")
+        
         if frecuencia_str not in FRECUENCIAS_PAGO:
-            raise ValueError(f"Frecuencia de pago no soportada: {frecuencia_str}")
+            raise ValueError(f"Frecuencia no soportada: {frecuencia_str}")
             
         dias_por_periodo, meses_por_periodo = FRECUENCIAS_PAGO[frecuencia_str]
 
-        # --- 2. Calcular Tasa de Interés del Período ---
-        # Primero, obtenemos la Tasa Efectiva Mensual (TEM)
+        # --- TASAS ---
         tasa_mensual = calcular_tasa_mensual(data.tasa, data.tipo_tasa, data.capitalizacion)
-        
-        # Convertir TEM a Tasa Efectiva Diaria (TED), asumiendo 30 días/mes
         tasa_diaria = (1 + tasa_mensual) ** (1/30) - 1
         
-        # Convertir TED a Tasa Efectiva del Período
+        # Esta es la tasa "pura" del préstamo (sin gastos)
+        # La usaremos para descontar el VAN
         tasa_interes_periodo = (1 + tasa_diaria) ** dias_por_periodo - 1
         
-        # --- 3. Calcular Costos del Período ---
-        # El seguro de desgravamen suele venir como % anual (ej: 0.5%)
-        pct_seg_desgrav_anual = getattr(data, "pct_seguro_desgravamen_anual", 0.0)
-        # Tasa de seguro para el período (interés simple, sobre saldo)
-        tasa_seguro_desgrav_periodo = (pct_seg_desgrav_anual / 100) * (dias_por_periodo / 360)
+        # --- COSTOS ---
         
-        # El seguro del bien y portes suelen ser montos fijos mensuales
+        # 1. Seguro de Desgravamen (Lógica MENSUAL)
+        # El usuario ingresa Tasa Mensual (ej. 0.05). 
+        # Aunque la variable se llame "...anual" (por el schema), la tratamos como mensual.
+        pct_seg_desgrav_mensual = getattr(data, "pct_seguro_desgravamen_anual", 0.0)
+        
+        # Convertimos % a decimal (0.05 -> 0.0005)
+        tasa_seguro_mensual_decimal = pct_seg_desgrav_mensual / 100
+        
+        # Ajustamos a la frecuencia de pago (Si es mensual, factor=1)
+        tasa_seguro_desgrav_periodo = tasa_seguro_mensual_decimal * meses_por_periodo
+        
+        # 2. Seguro del Bien
         seguro_bien_monto_mensual = getattr(data, "seguro_bien_monto", 0.0)
         seguro_bien_periodo = seguro_bien_monto_mensual * meses_por_periodo
         
+        # 3. Portes
         portes_monto_mensual = getattr(data, "portes_monto", 0.0)
         portes_periodo = portes_monto_mensual * meses_por_periodo
 
-        # --- 4. Calcular Plazos en Períodos ---
-        # Usamos math.ceil para asegurar que el último período se incluya
+        # --- PLAZOS ---
         plazo_total_periodos = int(math.ceil(plazo_total_meses / meses_por_periodo))
-        
         periodo_gracia_meses = 0
-        if data.gracia == "total":
+        if data.gracia in ["total", "parcial"]:
             periodo_gracia_meses = 6
-        elif data.gracia == "parcial":
-            periodo_gracia_meses = 6
-        
         periodo_gracia_en_periodos = int(math.ceil(periodo_gracia_meses / meses_por_periodo))
         
-        # --- 5. Generar la tabla ---
+        # --- GENERAR TABLA ---
         tabla, cuota_credito_fija = generar_tabla_amortizacion(
-            monto_financiado, 
-            tasa_interes_periodo, 
-            plazo_total_periodos, 
-            periodo_gracia_en_periodos, 
-            data.gracia,
-            tasa_seguro_desgrav_periodo,
-            seguro_bien_periodo,
-            portes_periodo
+            monto_financiado, tasa_interes_periodo, plazo_total_periodos, 
+            periodo_gracia_en_periodos, data.gracia,
+            tasa_seguro_desgrav_periodo, seguro_bien_periodo, portes_periodo
         )
         
-        # --- 6. Agregar fila inicial (Periodo 0) ---
+        # --- FILA INICIAL ---
+        gastos_iniciales = getattr(data, "gastos_iniciales", 0.0)
+        flujo_inicial = monto_financiado - gastos_iniciales
+
         tabla.insert(0, {
-            "periodo": 0,
-            "cuota_total": 0.0,
-            "cuota_credito": 0.0,
-            "interes": 0.0,
-            "amortizacion": 0.0,
-            "seguro_desgravamen": 0.0,
-            "seguro_bien": 0.0,
-            "portes": 0.0,
-            "saldo": monto_financiado,
-            "flujo": monto_financiado
+            "periodo": 0, "cuota_total": 0.0, "cuota_credito": 0.0, "interes": 0.0,
+            "amortizacion": 0.0, "seguro_desgravamen": 0.0, "seguro_bien": 0.0,
+            "portes": 0.0, "saldo": monto_financiado, "flujo": flujo_inicial
         })
         
-        # --- 7. Calcular Totales ---
+        # --- CÁLCULO VAN / TIR ---
+        flujos_caja = [fila["flujo"] for fila in tabla]
+        
+        # 1. TIR
+        guess = tasa_interes_periodo if tasa_interes_periodo > 0 else 0.01
+        tir_periodo = calcular_tir_interno(flujos_caja, guess=guess)
+        
+        tir_anual_cliente = None
+        if tir_periodo is not None:
+            periodos_ano_tir = 360 / dias_por_periodo
+            tir_anual_cliente = ((1 + tir_periodo) ** periodos_ano_tir - 1) * 100
+
+        # 2. VAN
+        # Usamos la TASA DEL PRÉSTAMO (tasa_interes_periodo) como tasa de descuento.
+        # Si hay gastos extras, la TIR será mayor que esta tasa, y el VAN será negativo.
+        van_cliente = calcular_van_interno(flujos_caja, tasa_interes_periodo)
+        
+        # --- RETORNO ---
         total_pagado = sum(fila["cuota_total"] for fila in tabla[1:])
         intereses_pagados = sum(fila["interes"] for fila in tabla[1:])
+        total_amortizacion = monto_financiado
         
         return {
             "frecuencia_pago": frecuencia_str,
@@ -252,8 +194,13 @@ def simulate_credit(data):
             "primera_cuota_total": round(tabla[1]["cuota_total"], 2) if len(tabla) > 1 else 0,
             "total_pagado": round(total_pagado, 2),
             "intereses_pagados": round(intereses_pagados, 2),
+            "total_amortizacion": round(total_amortizacion, 2),
             "tasa_efectiva_mensual": round(tasa_mensual * 100, 6),
             "tasa_efectiva_periodo": round(tasa_interes_periodo * 100, 6),
+            
+            "van_cliente": round(van_cliente, 2),
+            "tir_cliente": round(tir_anual_cliente, 6) if tir_anual_cliente is not None else 0.0,
+            
             "tabla_amortizacion": [
                 {
                     "periodo": fila["periodo"],
@@ -273,5 +220,4 @@ def simulate_credit(data):
         
     except Exception as e:
         print(f"Error en simulate_credit: {e}")
-        # En un entorno de API, querrías devolver un JSON de error
         return {"error": str(e)}

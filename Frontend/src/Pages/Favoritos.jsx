@@ -1,44 +1,37 @@
 import { useState, useEffect, useRef } from "react";
-import { HomeIcon, ChartIcon } from "../assets/icons";
+import { HomeIcon, ChartIcon } from "../assets/icons"; // Ajusta ruta si es necesario
 import PropertyCard from "../Components/Cards/PropiedadCard.jsx"; 
-import AddPropertyModal from "../Components/AddPropertyModal.jsx";
-import PropertyDetailsModal from "../Components/PropertyDetailsModal.jsx";
+import PropertyDetailsModal from "../Components/PropertyDetailsModal.jsx"; // O la ruta donde lo tengas
 
-export default function Welcome({ user, token, onNavigateToSimulator }) {
+export default function Favoritos({ user, token, onNavigateToSimulator }) {
     const [properties, setProperties] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
 
-    // --- NUEVO ESTADO: IDs DE FAVORITOS ---
-    const [favoriteIds, setFavoriteIds] = useState(new Set());
-
-    // --- ESTADOS PARA EL MODAL (NUEVO) ---
-    const [isModalOpen, setIsModalOpen] = useState(false);
-
-    // --- ESTADOS PARA FILTROS ---
+    // Estados para Filtros (Igual que en Welcome)
     const [searchTerm, setSearchTerm] = useState("");
     const [activeDropdown, setActiveDropdown] = useState(null);
     const [selectedFilters, setSelectedFilters] = useState({});
-
-    const dropdownRef = useRef(null);
-
-    const filterOptions = ["Precio", "Lugar", "Area", "Estado", "Tipo"]; 
+    
+    // Estado para Modal de Detalles
     const [selectedProperty, setSelectedProperty] = useState(null);
 
-    // --- CARGAR PROPIEDADES ---
+    const dropdownRef = useRef(null);
+    const filterOptions = ["Precio", "Lugar", "Area", "Estado", "Tipo"]; 
+
     useEffect(() => {
-        const fetchProperties = async () => {
+        const fetchFavorites = async () => {
             try {
                 setLoading(true);
-                const [resProps, resFavs] = await Promise.all([
-                    fetch("http://localhost:8000/api/properties/", { headers: { "Authorization": `Bearer ${token}` } }),
-                    fetch("http://localhost:8000/api/favorites/", { headers: { "Authorization": `Bearer ${token}` } })
-                ]);
+                // CAMBIO CLAVE: Llamamos al endpoint de favoritos, no al de todas las propiedades
+                const res = await fetch("http://localhost:8000/api/favorites/", {
+                    headers: { "Authorization": `Bearer ${token}` }
+                });
 
-                if (!resProps.ok) throw new Error("Error al cargar propiedades");
+                if (!res.ok) throw new Error("Error al cargar favoritos");
+                const data = await res.json();
 
-                const dataProps = await resProps.json();
-                const mappedProperties = dataProps.map(prop => ({
+                const mappedProperties = data.map(prop => ({
                     id: prop.id_unidad,
                     address: `${prop.direccion}, ${prop.lugar}`,
                     city: prop.lugar, 
@@ -52,15 +45,6 @@ export default function Welcome({ user, token, onNavigateToSimulator }) {
                     image: prop.fotos && prop.fotos.length > 0 ? prop.fotos[0].url_foto : null
                 }));
 
-                // 2. PROCESAMOS FAVORITOS
-                if (resFavs.ok) {
-                    const dataFavs = await resFavs.json();
-                    // Guardamos solo los IDs en un Set para búsqueda rápida
-                    // dataFavs devuelve una lista de propiedades, extraemos id_unidad
-                    const ids = new Set(dataFavs.map(fav => fav.id_unidad));
-                    setFavoriteIds(ids);
-                }
-
                 setProperties(mappedProperties);
                 setLoading(false);
             } catch (err) {
@@ -69,10 +53,11 @@ export default function Welcome({ user, token, onNavigateToSimulator }) {
                 setLoading(false);
             }
         };
-        if (token) fetchProperties();
+        
+        if (token) fetchFavorites();
     }, [token]);
 
-    // --- CERRAR DROPDOWN AL CLICKERA FUERA ---
+    // Cerrar menús al hacer click fuera
     useEffect(() => {
         function handleClickOutside(event) {
             if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
@@ -83,43 +68,13 @@ export default function Welcome({ user, token, onNavigateToSimulator }) {
         return () => document.removeEventListener("mousedown", handleClickOutside);
     }, []);
 
-    // --- GUARDAR NUEVA PROPIEDAD (CONEXIÓN BACKEND) ---
-    const handleSaveProperty = async (newPropertyData) => {
-        try {
-            // Preparamos el payload. Ajustamos la foto para que sea una lista si tu backend lo requiere
-            const payload = {
-                ...newPropertyData,
-                fotos: newPropertyData.url_foto ? [{ url_foto: newPropertyData.url_foto }] : []
-            };
-
-            const res = await fetch("http://localhost:8000/api/properties/", {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                    "Authorization": `Bearer ${token}`
-                },
-                body: JSON.stringify(payload)
-            });
-
-            if (!res.ok) throw new Error("Error al crear propiedad");
-            
-            alert("¡Propiedad creada con éxito!");
-            setIsModalOpen(false); // Cerrar modal
-            window.location.reload(); // Recargar para ver la nueva propiedad
-
-        } catch (error) {
-            console.error(error);
-            alert("Hubo un error al guardar: " + error.message);
-        }
-    };
-
     const formatPrice = (price) => {
         return new Intl.NumberFormat('es-PE', {
             style: 'currency', currency: 'PEN', minimumFractionDigits: 0
         }).format(price);
     };
 
-    // --- LÓGICA FILTROS ---
+    // --- LÓGICA DE FILTROS (Copia exacta de Welcome) ---
     const getOptionsForFilter = (filterName) => {
         switch (filterName) {
             case "Tipo": return [...new Set(properties.map(p => p.type))];
@@ -146,11 +101,9 @@ export default function Welcome({ user, token, onNavigateToSimulator }) {
         const matchesSearch = searchTerm === "" || 
             prop.address.toLowerCase().includes(searchTerm.toLowerCase()) ||
             prop.type.toLowerCase().includes(searchTerm.toLowerCase());
-
         const matchesType = !selectedFilters["Tipo"] || prop.type === selectedFilters["Tipo"];
         const matchesPlace = !selectedFilters["Lugar"] || prop.city === selectedFilters["Lugar"];
         const matchesStatus = !selectedFilters["Estado"] || prop.status === selectedFilters["Estado"];
-
         return matchesSearch && matchesType && matchesPlace && matchesStatus;
     }).sort((a, b) => {
         if (selectedFilters["Precio"] === "Menor a Mayor") return a.price - b.price;
@@ -164,22 +117,26 @@ export default function Welcome({ user, token, onNavigateToSimulator }) {
         <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 font-['Poppins']">
             <div className="w-full max-w-[1800px] mx-auto px-4 md:px-8 py-8">
                 
+                {/* Header igual a Welcome */}
                 <div className="text-center mb-12">
-                    <h2 className="text-4xl font-bold text-gray-800 mb-8">¡Bienvenido de vuelta, {user?.username}!</h2>
-                    <p className="text-xl text-gray-600 max-w-2xl mx-auto">Aquí puedes ver todos tus inmuebles registrados y acceder al simulador de créditos.</p>
+                    <h2 className="text-4xl font-bold text-gray-800 mb-4">❤️ Mis Favoritos</h2>
+                    <p className="text-xl text-gray-600 max-w-2xl mx-auto">
+                        Aquí encontrarás todas las propiedades que has guardado.
+                    </p>
                 </div>
 
+                {/* Accesos Directos (Para mantener consistencia) */}
                 <div className="grid md:grid-cols-2 gap-6 mb-12 w-full">
                     <div className="bg-white p-6 rounded-xl shadow-lg">
                         <div className="flex items-center space-x-4">
                             <div className="bg-blue-100 p-3 rounded-full"><HomeIcon width={28} height={28} fill="#1D4ED8" /></div>
-                            <div><h3 className="text-xl font-semibold text-gray-800">Mis Propiedades</h3><p className="text-gray-600">Gestiona y visualiza tus inmuebles</p></div>
+                            <div><h3 className="text-xl font-semibold text-gray-800">Volver al Inicio</h3><p className="text-gray-600">Explora más propiedades disponibles</p></div>
                         </div>
                     </div>
                     <div className="bg-gradient-to-r from-blue-500 to-purple-600 p-6 rounded-xl shadow-lg text-white cursor-pointer hover:shadow-xl transition-shadow" onClick={onNavigateToSimulator}>
                         <div className="flex items-center space-x-4">
                             <div className="bg-white/20 p-3 rounded-full"><ChartIcon width={28} height={28} stroke="#ffffffff" /></div>
-                            <div><h3 className="text-xl font-semibold">Simulador de Créditos</h3><p className="opacity-90">Calcula y analiza opciones de financiamiento</p></div>
+                            <div><h3 className="text-xl font-semibold">Simulador de Créditos</h3><p className="opacity-90">Calcula financiamiento para tus favoritos</p></div>
                         </div>
                     </div>
                 </div>
@@ -187,27 +144,20 @@ export default function Welcome({ user, token, onNavigateToSimulator }) {
                 {/* --- CONTENEDOR BLANCO PRINCIPAL --- */}
                 <div className="bg-white rounded-xl shadow-lg p-6 md:p-10 min-h-[600px]">
                     
+                    {/* Título de la sección */}
                     <div className="flex justify-between items-center mb-6 w-full max-w-[1570px] mx-auto">
-                        <h3 className="text-2xl font-bold text-[#1F2937]">Descubre nuevas unidades</h3>
-                        {/* BOTÓN AGREGAR CON LÓGICA */}
-                        {user?.role === "admin" && (
-                            <button 
-                                onClick={() => setIsModalOpen(true)}
-                                className="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg font-semibold transition-colors"
-                            >
-                                + Agregar Propiedad
-                            </button>
-                        )}
+                        <h3 className="text-2xl font-bold text-[#1F2937]">Tu lista de deseos</h3>
+                        {/* No mostramos botón de agregar propiedad aquí */}
                     </div>
 
-                    {/* --- SECCIÓN BÚSQUEDA Y FILTROS --- */}
+                    {/* --- FILTROS (Exactamente igual que Welcome) --- */}
                     <div className="mb-10 space-y-6 flex flex-col items-start w-full max-w-[1570px] mx-auto" ref={dropdownRef}>
                         
                         {/* Barra de Búsqueda */}
                         <div className="relative w-full md:w-[600px]">
                             <input 
                                 type="text" 
-                                placeholder="¿Qué estás buscando?" 
+                                placeholder="Filtrar en mis favoritos..." 
                                 value={searchTerm}
                                 onChange={(e) => setSearchTerm(e.target.value)}
                                 className="w-full bg-[#E5E7EB] text-gray-700 rounded-full py-3 pl-6 pr-12 outline-none focus:ring-2 focus:ring-blue-200 transition-all placeholder-gray-500"
@@ -217,7 +167,7 @@ export default function Welcome({ user, token, onNavigateToSimulator }) {
                             </div>
                         </div>
 
-                        {/* Filtros Interactivos */}
+                        {/* Dropdowns */}
                         <div className="flex flex-wrap gap-4 justify-start w-full relative">
                             {filterOptions.map((filter) => {
                                 const isSelected = selectedFilters[filter];
@@ -272,15 +222,15 @@ export default function Welcome({ user, token, onNavigateToSimulator }) {
                     {loading ? (
                         <div className="text-center py-8">
                             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-                            <p className="text-gray-600 mt-4">Cargando propiedades...</p>
+                            <p className="text-gray-600 mt-4">Cargando tus favoritos...</p>
                         </div>
                     ) : error ? (
                         <div className="text-center py-8"><p className="text-red-600">Error: {error}</p></div>
                     ) : filteredProperties.length === 0 ? (
                         <div className="text-center py-12">
-                            <div className="bg-gray-100 rounded-full w-24 h-24 flex items-center justify-center mx-auto mb-4"><span className="text-4xl text-gray-400">🔍</span></div>
-                            <h4 className="text-xl font-semibold text-gray-600 mb-2">No se encontraron resultados</h4>
-                            <p className="text-gray-500">Intenta ajustar tus filtros de búsqueda.</p>
+                            <div className="bg-gray-100 rounded-full w-24 h-24 flex items-center justify-center mx-auto mb-4"><span className="text-4xl text-gray-400">💔</span></div>
+                            <h4 className="text-xl font-semibold text-gray-600 mb-2">No tienes favoritos aún</h4>
+                            <p className="text-gray-500">Ve al inicio y dale ❤️ a las propiedades que te gusten.</p>
                         </div>
                     ) : (
                         <div className="flex flex-wrap gap-16 justify-center">
@@ -291,8 +241,10 @@ export default function Welcome({ user, token, onNavigateToSimulator }) {
                                     formatPrice={formatPrice}
                                     onNavigateToSimulator={onNavigateToSimulator}
                                     onClickDetails={() => setSelectedProperty(property)}
+                                    
+                                    // PROPS CLAVE PARA FAVORITOS
                                     token={token}
-                                    initialIsFavorite={favoriteIds.has(property.id)}
+                                    initialIsFavorite={true} // Aquí SIEMPRE es true porque estamos en la página de favoritos
                                 />
                             ))}
                         </div>
@@ -300,17 +252,11 @@ export default function Welcome({ user, token, onNavigateToSimulator }) {
                 </div>
             </div>
 
-            {/* MODAL DE AGREGAR PROPIEDAD */}
-            <AddPropertyModal 
-                isOpen={isModalOpen} 
-                onClose={() => setIsModalOpen(false)} 
-                onSave={handleSaveProperty} 
-            />
-
+            {/* Modal de Detalles */}
             <PropertyDetailsModal 
                 property={selectedProperty}
-                isOpen={!!selectedProperty} // Está abierto si hay una propiedad seleccionada
-                onClose={() => setSelectedProperty(null)} // Al cerrar, limpiamos el estado
+                isOpen={!!selectedProperty} 
+                onClose={() => setSelectedProperty(null)} 
                 onNavigateToSimulator={onNavigateToSimulator}
              />
         </div>

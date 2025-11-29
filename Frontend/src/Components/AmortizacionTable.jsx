@@ -34,7 +34,7 @@ export default function AmortizationTable({ tabla, frecuencia = "mensual" }) {
 
   const totalPagado = dataRows.reduce((sum, row) => sum + row.cuota_total, 0);
   const totalIntereses = dataRows.reduce((sum, row) => sum + row.interes, 0);
-  const totalAmortizacion = dataRows.reduce((sum, row) => sum + row.amortizacion, 0);
+  const totalAmortizacion = tabla.length > 0 ? tabla[0].saldo : 0;
 
   const goToPage = (page) => {
     setCurrentPage(Math.max(1, Math.min(page, totalPages)));

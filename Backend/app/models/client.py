@@ -1,6 +1,4 @@
-from datetime import date
-from pydantic import BaseModel, EmailStr
-from sqlalchemy import Column, Integer, String, Date, Boolean, Numeric, ForeignKey
+from sqlalchemy import Column, Integer, Numeric, String, Boolean, ForeignKey, Text
 from sqlalchemy.orm import relationship
 from ..database import Base
 
@@ -8,46 +6,22 @@ class Client(Base):
     __tablename__ = "clientes"
 
     id_cliente = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), unique=True, nullable=False)
     
-    user_id = Column(Integer, ForeignKey('users.id'), unique=True, nullable=False)
-    
-    # Campos de Cliente
-    nombres = Column(String(100), nullable=False)
-    apellidos = Column(String(100), nullable=False)
-    tipo_documento = Column(String(20))
-    documento = Column(String(20), unique=True, index=True, nullable=False)
-    fecha_nacimiento = Column(Date)
-    telefono = Column(String(20))
-    correo = Column(String(100), unique=True, index=True, nullable=False)
-    direccion = Column(String(255))
-    ingresos_mensuales = Column(Numeric(10, 2))
-    consentimiento_datos = Column(Boolean)
+    # Datos Financieros
+    ingresos_mensuales = Column(Numeric(12, 2), default=0)
+    tipo_trabajador = Column(String(50), nullable=True) 
+    estado_civil = Column(String(20), nullable=True)
+    consentimiento_datos = Column(Boolean, default=False)
 
-    # Definición de relaciones
+    # === NUEVOS CAMPOS PARA SEGUIMIENTO (CRM) ===
+    # Estados: 'NUEVO', 'CONTACTADO', 'INTERESADO', 'EN_EVALUACION', 'CERRADO', 'DESCARTADO'
+    estado_seguimiento = Column(String(50), default="NUEVO") 
+    
+    # Notas del asesor (ej: "El cliente prefiere que lo llamen por la tarde")
+    notas_seguimiento = Column(Text, nullable=True)
+    
+    # Score calculado (se puede actualizar periódicamente)
+    scoring_credito = Column(Integer, default=0)
+
     user = relationship("User", back_populates="client")
-    
-    #simulaciones = relationship("SimulacionCredito", back_populates="cliente")
-
-
-# ===================================================================
-# MODELOS para validación
-# ===================================================================
-
-class ClientCreate(BaseModel):
-    nombres: str
-    apellidos: str
-    tipo_documento: str
-    documento: str
-    fecha_nacimiento: date
-    telefono: str
-    correo: EmailStr
-    direccion: str
-    ingresos_mensuales: float
-    consentimiento_datos: bool
-
-class ClientRead(ClientCreate):
-    id_cliente: int
-    user_id: int
-    
-    class Config:
-        from_attributes = True

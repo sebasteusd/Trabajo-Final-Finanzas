@@ -1,7 +1,9 @@
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field # <--- Importante agregar Field
 from typing import Optional, List, Literal
 from enum import Enum
+# Importa tu función lógica (asegúrate que la ruta sea correcta)
+# from app.services.simulator import simulate_credit 
 
 class TipoCapitalizacion(str, Enum):
     diaria = "diaria"
@@ -28,8 +30,7 @@ class FrecuenciaPago(str, Enum):
     semestral = "semestral"
     anual = "anual"
 
-# --- 1. MODELO DE ENTRADA---
-
+# --- 1. MODELO DE ENTRADA ---
 
 class CreditInput(BaseModel):
     monto: float
@@ -41,18 +42,19 @@ class CreditInput(BaseModel):
     gracia: TipoGracia
     bono_techo_propio: Optional[float] = 0.0
     
-    # Campos que faltaban y que React sí envía
+    # Campos que React envía
     frecuencia_pago: FrecuenciaPago
-    pct_seguro_desgravamen_anual: float
-    seguro_bien_monto: float
-    portes_monto: float
+    pct_seguro_desgravamen_anual: float = 0.0
+    seguro_bien_monto: float = 0.0
+    portes_monto: float = 0.0
+    gastos_iniciales: Optional[float] = 0.0
+
 
 # --- 2. MODELOS DE SALIDA ---
 
 class AmortizationRow(BaseModel):
     """
     Define la estructura de CADA FILA en la tabla de amortización
-    (Coincide con la tabla de React)
     """
     periodo: int
     cuota_total: float
@@ -67,7 +69,8 @@ class AmortizationRow(BaseModel):
 
 class CreditOutput(BaseModel):
     """
-    Define la estructura de la RESPUESTA COMPLETA de la simulación
+    Define la estructura de la RESPUESTA COMPLETA de la simulación.
+    Cualquier campo que NO esté aquí, FastAPI lo borrará.
     """
     frecuencia_pago: str
     numero_de_periodos: int
@@ -77,6 +80,12 @@ class CreditOutput(BaseModel):
     intereses_pagados: float
     tasa_efectiva_mensual: float
     tasa_efectiva_periodo: float
+    
+    # === AQUÍ ESTABA EL ERROR: AGREGAR VAN Y TIR ===
+    van_cliente: Optional[float] = None
+    tir_cliente: Optional[float] = None
+    # ===============================================
+
     tabla_amortizacion: List[AmortizationRow] 
 
 
@@ -84,27 +93,28 @@ class CreditOutput(BaseModel):
 
 router = APIRouter()
 
+# Asegúrate de importar simulate_credit al principio del archivo si no está
+# from app.services.simulator import simulate_credit
+
 @router.post("/simulate", response_model=CreditOutput)
 def handle_simulation(data: CreditInput):
     """
-    Recibe los datos del crédito, los valida con CreditInput,
-    ejecuta la simulación y devuelve una respuesta 
-    validada por CreditOutput.
+    Recibe los datos, calcula y devuelve SOLO los campos definidos en CreditOutput.
     """
+    from app.services.simulator import simulate_credit # Importación local para evitar ciclos
+
     try:
-        # Llama a la lógica de simulación
-        # 'data' es un objeto Pydantic validado
+        # data ya incluye data.cok gracias a CreditInput actualizado
         result = simulate_credit(data)
         
-        # FastAPI se asegurará automáticamente de que 'result'
-        # coincida con la estructura de CreditOutput
-        # antes de enviarlo.
+        # Validación extra por si la función devuelve error
+        if isinstance(result, dict) and "error" in result:
+             raise HTTPException(status_code=400, detail=result["error"])
+
         return result
         
     except ValueError as e:
-        # Captura errores de lógica (ej. "Frecuencia no soportada")
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
-        # Captura cualquier otro error inesperado
         print(f"Error inesperado en simulación: {e}")
-        raise HTTPException(status_code=500, detail="Error interno del servidor al procesar la simulación.")
+        raise HTTPException(status_code=500, detail=f"Error interno: {str(e)}")

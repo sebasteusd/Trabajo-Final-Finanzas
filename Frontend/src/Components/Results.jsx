@@ -1,11 +1,12 @@
 import { useState } from "react";
-import { ChartIcon, CardIcon, BonoIcon, HistoryIcon, CheckIcon, AspaIcon, AlertIcon, ReportIcon, IdeaIcon } from "../assets/icons";
+import { ChartIcon, CardIcon, BonoIcon, HistoryIcon, CheckIcon, AspaIcon, AlertIcon, IdeaIcon } from "../assets/icons";
 
 export default function Results({ data, inputs }) {
   if (!data) return null;
 
   const formatCurrency = (value, currency = "PEN") => {
     const currencySymbol = inputs?.moneda === "USD" ? "US$" : "S/";
+    // Evita mostrar "-0.00"
     const val = Object.is(value, -0) ? 0 : value;
     return `${currencySymbol} ${new Intl.NumberFormat('es-PE', {
       minimumFractionDigits: 2,
@@ -17,7 +18,17 @@ export default function Results({ data, inputs }) {
     ? data.frecuencia_pago.charAt(0).toUpperCase() + data.frecuencia_pago.slice(1)
     : "Período";
 
-  const montoFinanciado = data.tabla_amortizacion[0]?.saldo || 0;
+  // --- CORRECCIÓN AQUÍ ---
+  // Obtenemos la cuota real desde la tabla de amortización (periodo 1)
+  // Asegúrate de que la propiedad en tu objeto tabla se llame 'cuota' o 'cuota_total'
+  const primeraCuota = data.tabla_amortizacion && data.tabla_amortizacion.length > 0
+    ? data.tabla_amortizacion[1].cuota_credito_pi
+    : 0;
+
+  // Calculamos el monto financiado (Saldo inicial antes de amortizar, 
+  // o suma de amortizaciones si prefieres, pero esto suele venir en data.monto)
+  const montoFinanciado = data.monto || (data.tabla_amortizacion[0]?.saldo + data.tabla_amortizacion[0]?.amortizacion) || 0;
+
 
   const getVanStatusColor = (van) => {
     if (van === null || van === undefined) return "text-gray-500";
@@ -48,12 +59,14 @@ export default function Results({ data, inputs }) {
 
       <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
         
+        {/* --- TARJETA DE PRIMERA CUOTA CORREGIDA --- */}
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-blue-600">Primera Cuota ({freqLabel})</p>
               <p className="text-2xl font-bold text-blue-800">
-                {formatCurrency(data.primera_cuota_total)}
+                {/* Usamos la variable corregida */}
+                {formatCurrency(primeraCuota)}
               </p>
             </div>
             <div className="bg-blue-100 p-2 rounded-full">
@@ -199,13 +212,13 @@ export default function Results({ data, inputs }) {
         </div>
       </div>
 
-      {/* Indicadores de alerta */}
-      {data.primera_cuota_total > 0 && (
+      {/* Indicadores de alerta (Usando primeraCuota corregida) */}
+      {primeraCuota > 0 && (
         <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
           <div className="flex items-center space-x-2">
             <AlertIcon width={28} height={28} fill="#97711eff" />
             <p className="text-sm text-yellow-800">
-              <strong>Recomendación:</strong> Tu primera cuota de <b>{formatCurrency(data.primera_cuota_total)}</b> no debería superar el 30% de tus ingresos familiares.
+              <strong>Recomendación:</strong> Tu primera cuota de <b>{formatCurrency(primeraCuota)}</b> no debería superar el 30% de tus ingresos familiares.
             </p>
           </div>
         </div>

@@ -10,11 +10,14 @@ from app.api import favorites
 from app.models import financial as financial_models
 from app.models import property as property_models
 from app.models import favorite as favorite_models
+from app.models import simulation as simulation_models 
+from app.api import simulations as simulations_router
 
 from app.api import properties
 from app.api import client as client_router
 # --- 1. IMPORTAR EL NUEVO ROUTER AQUÍ ---
 from app.api import financial as financial_router 
+
 
 # ===========================================
 # CREAR TABLAS
@@ -55,6 +58,7 @@ app.include_router(properties.router, prefix="/api/properties", tags=["Propertie
 app.include_router(opportunities.router, prefix="/api/crm", tags=["CRM"]) 
 app.include_router(favorites.router, prefix="/api/favorites", tags=["Favorites"])
 app.include_router(client_router.router, prefix="/api/client", tags=["Client"])
+app.include_router(simulations_router.router, prefix="/api/simulations", tags=["Simulaciones (Persistencia)"])
 
 # --- 2. REGISTRAR LA RUTA AQUÍ ---
 # Esto habilitará: http://localhost:8000/api/financial/entities

@@ -9,6 +9,12 @@ export default function Simulador({ user, token, view, users }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
+  // --- NUEVO ESTADO: Para guardar los inputs de la simulación actual ---
+  const [currentSimulationParams, setCurrentSimulationParams] = useState(null);
+  
+  // --- NUEVO ESTADO: Loading del guardado ---
+  const [saving, setSaving] = useState(false);
+
   const simulateCredit = async (payload) => {
     try {
       setLoading(true);
@@ -28,11 +34,71 @@ export default function Simulador({ user, token, view, users }) {
       
       const data = await res.json();
       setResult(data);
+
+      // --- GUARDAMOS LOS PARÁMETROS PARA USARLOS AL GUARDAR EN BD ---
+      setCurrentSimulationParams(payload);
+
     } catch (error) {
       console.error("Error al simular:", error);
       setError("Error al realizar la simulación. Por favor, intenta nuevamente.");
     } finally {
       setLoading(false);
+    }
+  };
+
+  // --- NUEVA FUNCIÓN: GUARDAR EN BASE DE DATOS ---
+  const handleSaveSimulation = async () => {
+    if (!result || !currentSimulationParams) return;
+
+    try {
+      setSaving(true);
+
+      // 1. Preparamos el payload según el esquema "SimulationCreate" del backend
+      // Mapeamos los datos del formulario (currentSimulationParams) y del resultado (result)
+      const savePayload = {
+        // Datos descriptivos
+        nombre_producto_credito: currentSimulationParams.entidad_financiera || "Crédito Personalizado",
+        concepto_temporal: "Propiedad", // Puedes cambiar esto si agregas un selector de "Tipo Inmueble" al form
+        moneda: currentSimulationParams.moneda,
+        
+        // Datos financieros (Snapshot)
+        valor_inmueble: parseFloat(currentSimulationParams.valor_inmueble),
+        
+        // Calculamos la cuota inicial basada en el % enviado
+        cuota_inicial: parseFloat(currentSimulationParams.valor_inmueble) * (parseFloat(currentSimulationParams.porcentaje_inicial) / 100),
+        
+        // El monto financiado viene del cálculo o del input
+        monto_financiado: parseFloat(currentSimulationParams.monto) - parseFloat(currentSimulationParams.bono_techo_propio || 0),
+        
+        plazo_anios: Math.ceil(parseInt(currentSimulationParams.plazo_meses) / 12),
+        
+        // Guardamos la Tasa Efectiva del Periodo (la real aplicada)
+        tasa_interes_aplicada: parseFloat(result.tasa_efectiva_periodo),
+        
+        // Guardamos la primera cuota como referencia
+        cuota_mensual_estimada: parseFloat(result.primera_cuota_total)
+      };
+
+      const res = await fetch("http://localhost:8000/api/simulations/", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(savePayload),
+      });
+
+      if (!res.ok) {
+        throw new Error("Error al guardar la simulación");
+      }
+
+      alert("¡Simulación guardada correctamente! Puedes verla en 'Mis Simulaciones'.");
+
+    } catch (err) {
+      console.error("Error saving:", err);
+      alert("Hubo un error al guardar la simulación.");
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -66,16 +132,22 @@ export default function Simulador({ user, token, view, users }) {
               </div>
 
               {/* Resultados */}
-              <div className="lg:col-span-4">   
+              <div className="lg:col-span-4">    
                 {loading ? (
-                  <div className="bg-white rounded-xl shadow-lg p-8 text-center">
-                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-                    <p className="text-gray-600">Calculando simulación...</p>
+                  <div className="bg-white rounded-xl shadow-lg p-8 text-center min-h-[400px] flex flex-col justify-center items-center">
+                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mb-4"></div>
+                    <p className="text-gray-600 text-lg">Calculando proyecciones financieras...</p>
                   </div>
                 ) : result ? (
-                  <div className="space-y-6">
-                    <Results data={result} />
-                    <AmortizationTable tabla={result?.tabla_amortizacion} />
+                  <div className="space-y-6 animate-fade-in-up">
+                    {/* PASAMOS LAS PROPS AL COMPONENTE RESULTS */}
+                    <Results 
+                        data={result} 
+                        inputs={currentSimulationParams} 
+                        onSave={handleSaveSimulation} // <--- Pasamos la función
+                        saving={saving}               // <--- Pasamos el estado
+                    />
+                    <AmortizationTable tabla={result?.tabla_amortizacion} frecuencia={result?.frecuencia_pago} />
                   </div>
                 ) : (
                   <div className="bg-white rounded-xl shadow-lg p-8 text-center">

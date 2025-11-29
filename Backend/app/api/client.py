@@ -6,6 +6,7 @@ from app.models.user import User
 from app.schemas import ClientRead, ClientUpdate
 from app.api.auth import get_current_user # Reusamos la dependencia de auth
 
+
 router = APIRouter()
 
 # --- ACTUALIZAR CLIENTE (Datos Financieros) ---

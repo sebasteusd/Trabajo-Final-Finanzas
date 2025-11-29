@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { ChartIcon, CardIcon, BonoIcon, HistoryIcon, CheckIcon, AspaIcon, AlertIcon, IdeaIcon } from "../assets/icons";
 
-export default function Results({ data, inputs }) {
+export default function Results({ data, inputs, onSave, saving }) {
   if (!data) return null;
 
   const formatCurrency = (value, currency = "PEN") => {
@@ -18,17 +18,12 @@ export default function Results({ data, inputs }) {
     ? data.frecuencia_pago.charAt(0).toUpperCase() + data.frecuencia_pago.slice(1)
     : "Período";
 
-  // --- CORRECCIÓN AQUÍ ---
   // Obtenemos la cuota real desde la tabla de amortización (periodo 1)
-  // Asegúrate de que la propiedad en tu objeto tabla se llame 'cuota' o 'cuota_total'
   const primeraCuota = data.tabla_amortizacion && data.tabla_amortizacion.length > 0
-    ? data.tabla_amortizacion[1].cuota_credito_pi
+    ? data.tabla_amortizacion[1].cuota_total // Usamos cuota_total (Capital + Interés + Seguros)
     : 0;
 
-  // Calculamos el monto financiado (Saldo inicial antes de amortizar, 
-  // o suma de amortizaciones si prefieres, pero esto suele venir en data.monto)
   const montoFinanciado = data.monto || (data.tabla_amortizacion[0]?.saldo + data.tabla_amortizacion[0]?.amortizacion) || 0;
-
 
   const getVanStatusColor = (van) => {
     if (van === null || van === undefined) return "text-gray-500";
@@ -47,25 +42,51 @@ export default function Results({ data, inputs }) {
     return tir >= 0 ? "text-green-600" : "text-red-600";
   };
 
-
   return (
-    <div className="bg-white rounded-xl shadow-lg p-6">
-      <div className="flex items-center space-x-3 mb-6">
-        <div className="bg-green-100 p-2 rounded-full">
-          <ChartIcon width={28} height={28} fill="#1D4ED8" />
+    <div className="bg-white rounded-xl shadow-lg p-6 relative">
+      
+      {/* --- HEADER CON BOTÓN GUARDAR --- */}
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-6 gap-4">
+        <div className="flex items-center space-x-3">
+          <div className="bg-green-100 p-2 rounded-full">
+            <ChartIcon width={28} height={28} fill="#1D4ED8" />
+          </div>
+          <h2 className="text-xl font-semibold text-gray-800">Resultados de la Simulación</h2>
         </div>
-        <h2 className="text-xl font-semibold text-gray-800">Resultados de la Simulación</h2>
+
+        {/* BOTÓN GUARDAR */}
+        <button
+          onClick={onSave}
+          disabled={saving}
+          className={`flex items-center space-x-2 px-4 py-2 rounded-lg font-semibold text-sm transition-all shadow-sm ${
+            saving 
+              ? "bg-gray-100 text-gray-400 cursor-wait" 
+              : "bg-blue-600 hover:bg-blue-700 text-white hover:shadow-md"
+          }`}
+        >
+            {saving ? (
+                <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-400"></div>
+                    <span>Guardando...</span>
+                </>
+            ) : (
+                <>
+                    <CheckIcon width={18} height={18} stroke="currentColor" /> 
+                    <span>Guardar Simulación</span>
+                </>
+            )}
+        </button>
       </div>
 
+      {/* --- GRID DE 3 TARJETAS --- */}
       <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
         
-        {/* --- TARJETA DE PRIMERA CUOTA CORREGIDA --- */}
+        {/* 1. TARJETA AZUL: PRIMERA CUOTA (AGREGADA) */}
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-blue-600">Primera Cuota ({freqLabel})</p>
               <p className="text-2xl font-bold text-blue-800">
-                {/* Usamos la variable corregida */}
                 {formatCurrency(primeraCuota)}
               </p>
             </div>
@@ -75,6 +96,7 @@ export default function Results({ data, inputs }) {
           </div>
         </div>
 
+        {/* 2. TARJETA MORADA: TOTAL A PAGAR */}
         <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
           <div className="flex items-center justify-between">
             <div>
@@ -89,6 +111,7 @@ export default function Results({ data, inputs }) {
           </div>
         </div>
 
+        {/* 3. TARJETA NARANJA: INTERESES */}
         <div className="bg-orange-50 border border-orange-200 rounded-lg p-4">
           <div className="flex items-center justify-between">
             <div>
@@ -212,7 +235,7 @@ export default function Results({ data, inputs }) {
         </div>
       </div>
 
-      {/* Indicadores de alerta (Usando primeraCuota corregida) */}
+      {/* Indicadores de alerta */}
       {primeraCuota > 0 && (
         <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
           <div className="flex items-center space-x-2">

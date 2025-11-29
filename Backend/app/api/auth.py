@@ -8,6 +8,8 @@ import shutil
 import os
 import uuid
 # Modelos
+# En app/api/auth.py, agrega esto arriba con los otros imports de modelos:
+from app.models.simulation import Simulacion  # <--- Agrega esto
 from app.models.user import User as UserModel
 from app.models.client import Client as ClientModel
 
@@ -286,3 +288,13 @@ def upload_avatar(
     db.refresh(current_user)
 
     return {"url": public_url}
+
+# --- (Agregar al final de auth.py) ---
+
+def get_current_active_user(current_user: UserModel = Depends(get_current_user)):
+    """
+    Dependencia para endpoints que requieren que el usuario esté activo.
+    """
+    if not current_user.is_active:
+        raise HTTPException(status_code=400, detail="Usuario inactivo")
+    return current_user

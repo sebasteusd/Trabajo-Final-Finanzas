@@ -1,78 +1,107 @@
 import { useState, useEffect, useRef } from "react";
 import { HomeIcon, ChartIcon } from "../assets/icons";
-// Asegúrate de que esta ruta apunte a tu nueva Card compacta
 import SimulacionCard from "../Components/Cards/SimulacionCard"; 
+import SimulacionDetailsModal from "../Components/SimulationDetailsModal";
+
+// Ajusta el puerto si es necesario
+const API_URL = "http://localhost:8000"; 
 
 export default function MisSimulaciones({ user, token, onNavigateToSimulator }) {
     const [simulaciones, setSimulaciones] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
 
-    // --- ESTADOS PARA FILTROS (IGUAL QUE EN PROPERTIES) ---
+    // --- ESTADOS PARA MODAL DE DETALLES ---
+    const [selectedSimulation, setSelectedSimulation] = useState(null);
+    const [isModalDetailsOpen, setIsModalDetailsOpen] = useState(false);
+
+    // --- ESTADOS PARA FILTROS ---
     const [searchTerm, setSearchTerm] = useState("");
     const [activeDropdown, setActiveDropdown] = useState(null);
     const [selectedFilters, setSelectedFilters] = useState({});
     
     const dropdownRef = useRef(null);
-    
-    // Adaptamos las opciones de filtro al contexto de Simulaciones
     const filterOptions = ["Concepto", "Tipo Crédito", "Monto", "Fecha"]; 
 
-    // --- CARGAR SIMULACIONES (MOCK) ---
+    // --- 1. CARGAR SIMULACIONES REALES ---
     useEffect(() => {
         const fetchSimulaciones = async () => {
             try {
                 setLoading(true);
-                // Simulamos petición a API
-                setTimeout(() => {
-                    setSimulaciones([
-                        {
-                            id: "000001",
-                            fecha: "07/12/2024",
-                            concepto: "Casa", // Esto mapeará a 'categoria' en la card
-                            monto: 750000,
-                            tipoCredito: "Crédito Mi Vivienda",
-                        },
-                        {
-                            id: "000002",
-                            fecha: "08/12/2024",
-                            concepto: "Departamento",
-                            monto: 320000,
-                            tipoCredito: "Crédito Hipotecario BCP",
-                        },
-                        {
-                            id: "000003",
-                            fecha: "10/12/2024",
-                            concepto: "Terreno",
-                            monto: 150000,
-                            tipoCredito: "Crédito Personal",
-                        },
-                        {
-                            id: "000004",
-                            fecha: "12/12/2024",
-                            concepto: "Casa",
-                            monto: 950000,
-                            tipoCredito: "Crédito Tradicional",
-                        },
-                        {
-                            id: "000005",
-                            fecha: "15/12/2024",
-                            concepto: "Local Comercial",
-                            monto: 450000,
-                            tipoCredito: "Leasing",
-                        }
-                    ]);
-                    setLoading(false);
-                }, 800);
+                
+                const res = await fetch(`${API_URL}/api/simulations/`, {
+                    headers: {
+                        "Authorization": `Bearer ${token}`,
+                        "Content-Type": "application/json"
+                    }
+                });
+
+                if (!res.ok) throw new Error("Error al cargar simulaciones");
+
+                const data = await res.json();
+
+                // --- MAPEO DE DATOS ---
+                const mappedData = data.map(sim => ({
+                    id: sim.id_simulacion.toString().padStart(6, '0'),
+                    realId: sim.id_simulacion,
+                    fecha: new Date(sim.fecha_simulacion).toLocaleDateString('es-PE', {
+                        day: '2-digit', month: '2-digit', year: 'numeric'
+                    }),
+                    concepto: sim.concepto_temporal || "Propiedad",
+                    monto: sim.monto_financiado,
+                    tipoCredito: sim.nombre_producto_credito,
+                    
+                    // === DATOS DETALLADOS PARA EL MODAL ===
+                    cuotaMensual: sim.cuota_mensual_estimada,
+                    plazoAnios: sim.plazo_anios,
+                    moneda: sim.moneda,
+                    
+                    // Datos originales del Snapshot
+                    valorInmueble: sim.valor_inmueble,
+                    cuotaInicial: sim.cuota_inicial,
+                    tasaInteres: sim.tasa_interes_aplicada, // La tasa guardada
+                    
+                    // Cálculos derivados (opcional, si no se guardaron en BD)
+                    totalPagos: sim.plazo_anios * 12,
+                    totalEstimado: sim.cuota_mensual_estimada * (sim.plazo_anios * 12)
+                }));
+
+                setSimulaciones(mappedData);
                 
             } catch (err) {
+                console.error(err);
                 setError(err.message);
+            } finally {
                 setLoading(false);
             }
         };
         
-        fetchSimulaciones();
+        if (token) fetchSimulaciones();
     }, [token]);
+
+    // --- HANDLER PARA ABRIR MODAL ---
+    const handleViewDetails = (simulation) => {
+        setSelectedSimulation(simulation);
+        setIsModalDetailsOpen(true);
+    };
+
+    // --- HANDLER PARA ELIMINAR ---
+    const handleDelete = async (realId) => {
+        if (!window.confirm("¿Estás seguro de que deseas eliminar esta simulación?")) return;
+
+        try {
+            const res = await fetch(`${API_URL}/api/simulations/${realId}`, {
+                method: "DELETE",
+                headers: { "Authorization": `Bearer ${token}` }
+            });
+
+            if (!res.ok) throw new Error("Error al eliminar");
+            setSimulaciones(prev => prev.filter(s => s.realId !== realId));
+
+        } catch (error) {
+            alert("No se pudo eliminar: " + error.message);
+        }
+    };
 
     // --- CERRAR DROPDOWN AL CLICKEAR FUERA ---
     useEffect(() => {
@@ -108,7 +137,6 @@ export default function MisSimulaciones({ user, token, onNavigateToSimulator }) 
     };
 
     const filteredSimulaciones = simulaciones.filter((sim) => {
-        // Búsqueda por ID o Concepto
         const matchesSearch = searchTerm === "" || 
             sim.id.includes(searchTerm) ||
             sim.concepto.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -119,23 +147,23 @@ export default function MisSimulaciones({ user, token, onNavigateToSimulator }) 
 
         return matchesSearch && matchesConcepto && matchesTipo;
     }).sort((a, b) => {
-        // Ordenamiento
         if (selectedFilters["Monto"] === "Menor a Mayor") return a.monto - b.monto;
         if (selectedFilters["Monto"] === "Mayor a Menor") return b.monto - a.monto;
         
-        // Asumiendo formato DD/MM/YYYY para fecha
-        const dateA = new Date(a.fecha.split('/').reverse().join('-'));
-        const dateB = new Date(b.fecha.split('/').reverse().join('-'));
+        const parseDate = (str) => {
+            const [d, m, y] = str.split('/');
+            return new Date(`${y}-${m}-${d}`);
+        };
+        const dateA = parseDate(a.fecha);
+        const dateB = parseDate(b.fecha);
 
         if (selectedFilters["Fecha"] === "Más Antiguas") return dateA - dateB;
-        // Default: Más recientes primero (o si está seleccionado explícitamente)
         return dateB - dateA; 
     });
 
     return (
         <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 font-['Poppins']">
             
-            {/* Contenedor Principal Amplio (Igual que Welcome) */}
             <div className="w-full max-w-[1800px] mx-auto px-4 md:px-8 py-8">
                 
                 <div className="text-center mb-12">
@@ -176,7 +204,6 @@ export default function MisSimulaciones({ user, token, onNavigateToSimulator }) 
                     </div>
                 </div>
 
-                {/* --- CONTENEDOR BLANCO PRINCIPAL (Estilo Idéntico a Properties) --- */}
                 <div className="bg-white rounded-xl shadow-lg p-6 md:p-10 min-h-[600px]">
                     
                     <div className="flex justify-between items-center mb-6 w-full max-w-[1570px] mx-auto">
@@ -193,7 +220,6 @@ export default function MisSimulaciones({ user, token, onNavigateToSimulator }) 
                     {/* --- SECCIÓN BÚSQUEDA Y FILTROS --- */}
                     <div className="mb-10 space-y-6 flex flex-col items-start w-full max-w-[1570px] mx-auto" ref={dropdownRef}>
                         
-                        {/* Barra de Búsqueda */}
                         <div className="relative w-full md:w-[600px]">
                             <input 
                                 type="text" 
@@ -207,7 +233,6 @@ export default function MisSimulaciones({ user, token, onNavigateToSimulator }) 
                             </div>
                         </div>
 
-                        {/* Filtros Interactivos (Pills) */}
                         <div className="flex flex-wrap gap-4 justify-start w-full relative">
                             {filterOptions.map((filter) => {
                                 const isSelected = selectedFilters[filter];
@@ -274,24 +299,31 @@ export default function MisSimulaciones({ user, token, onNavigateToSimulator }) 
                             <p className="text-gray-500 mb-6">Intenta ajustar tus filtros de búsqueda.</p>
                         </div>
                     ) : (
-                        // Grid con gap-16 como en properties para mucho aire
                         <div className="flex flex-wrap gap-8 justify-center">
                             {filteredSimulaciones.map((sim) => (
                                 <SimulacionCard
-                                    key={sim.id}
-                                    id={sim.id}
+                                    key={sim.realId} // Usamos ID real para la key de React
+                                    id={sim.id}      // Usamos el ID formateado para mostrar
                                     fecha={sim.fecha}
                                     monto={sim.monto}
                                     tipoCredito={sim.tipoCredito}
                                     categoria={sim.concepto}
-                                    onDelete={() => console.log("Eliminar", sim.id)}
-                                    onViewDetails={() => console.log("Ver detalle", sim.id)}
+                                    onDelete={() => handleDelete(sim.realId)}
+                                    // AHORA SÍ: Conectamos la acción al handler del modal
+                                    onViewDetails={() => handleViewDetails(sim)}
                                 />
                             ))}
                         </div>
                     )}
                 </div>
             </div>
+
+            {/* --- RENDERIZAMOS EL MODAL AQUÍ --- */}
+            <SimulacionDetailsModal 
+                isOpen={isModalDetailsOpen}
+                onClose={() => setIsModalDetailsOpen(false)}
+                simulation={selectedSimulation}
+            />
         </div>
     );
 }

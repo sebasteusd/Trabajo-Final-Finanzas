@@ -189,4 +189,46 @@ class CreditSimulationInput(BaseModel):
     class Config:
         from_attributes = True
 
-        
+# ==========================================
+# 7. ESQUEMAS PARA GUARDAR/LEER SIMULACIONES
+# ==========================================
+
+# Lo que recibimos del Frontend para GUARDAR en BD
+class SimulationCreate(BaseModel):
+    # IDs opcionales (si vienen de una propiedad/banco específico)
+    id_unidad: Optional[int] = None
+    id_entidad: Optional[int] = None
+    
+    # Datos del Snapshot
+    nombre_producto_credito: str = "Crédito Hipotecario"
+    concepto_temporal: str = "Propiedad" # Casa, Depa, Terreno
+    
+    moneda: str = "PEN"
+    valor_inmueble: float
+    cuota_inicial: float
+    monto_financiado: float
+    plazo_anios: int
+    tasa_interes_aplicada: float
+    cuota_mensual_estimada: float
+
+# Lo que enviamos al Frontend para mostrar en las CARDS
+# --- CORRECCIÓN AQUÍ: AGREGAMOS LOS CAMPOS FALTANTES ---
+class SimulationRead(BaseModel):
+    id_simulacion: int
+    fecha_simulacion: datetime
+    
+    concepto_temporal: str
+    nombre_producto_credito: str
+    monto_financiado: float
+    
+    # CAMPOS NUEVOS PARA EL MODAL DETALLADO
+    valor_inmueble: float        # <--- Agregado
+    cuota_inicial: float         # <--- Agregado
+    tasa_interes_aplicada: float # <--- Agregado
+    
+    cuota_mensual_estimada: float
+    plazo_anios: int
+    moneda: str
+
+    class Config:
+        from_attributes = True

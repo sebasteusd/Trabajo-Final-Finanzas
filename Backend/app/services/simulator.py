@@ -117,27 +117,16 @@ def simulate_credit(data):
         tasa_diaria = (1 + tasa_mensual) ** (1/30) - 1
         
         # Esta es la tasa "pura" del préstamo (sin gastos)
-        # La usaremos para descontar el VAN
         tasa_interes_periodo = (1 + tasa_diaria) ** dias_por_periodo - 1
         
         # --- COSTOS ---
-        
-        # 1. Seguro de Desgravamen (Lógica MENSUAL)
-        # El usuario ingresa Tasa Mensual (ej. 0.05). 
-        # Aunque la variable se llame "...anual" (por el schema), la tratamos como mensual.
         pct_seg_desgrav_mensual = getattr(data, "pct_seguro_desgravamen_anual", 0.0)
-        
-        # Convertimos % a decimal (0.05 -> 0.0005)
         tasa_seguro_mensual_decimal = pct_seg_desgrav_mensual / 100
-        
-        # Ajustamos a la frecuencia de pago (Si es mensual, factor=1)
         tasa_seguro_desgrav_periodo = tasa_seguro_mensual_decimal * meses_por_periodo
         
-        # 2. Seguro del Bien
         seguro_bien_monto_mensual = getattr(data, "seguro_bien_monto", 0.0)
         seguro_bien_periodo = seguro_bien_monto_mensual * meses_por_periodo
         
-        # 3. Portes
         portes_monto_mensual = getattr(data, "portes_monto", 0.0)
         portes_periodo = portes_monto_mensual * meses_por_periodo
 
@@ -165,22 +154,33 @@ def simulate_credit(data):
             "portes": 0.0, "saldo": monto_financiado, "flujo": flujo_inicial
         })
         
-        # --- CÁLCULO VAN / TIR ---
-        flujos_caja = [fila["flujo"] for fila in tabla]
+        # --- CÁLCULOS AVANZADOS (VAN / TIR / TCEA) ---
+        flujos_caja_cliente = [fila["flujo"] for fila in tabla]
         
-        # 1. TIR
+        # 1. TIR Período (Mensual/Periódica)
         guess = tasa_interes_periodo if tasa_interes_periodo > 0 else 0.01
-        tir_periodo = calcular_tir_interno(flujos_caja, guess=guess)
+        tir_periodo_decimal = calcular_tir_interno(flujos_caja_cliente, guess=guess)
         
-        tir_anual_cliente = None
-        if tir_periodo is not None:
+        # Variables de salida
+        tcea_valor = 0.0
+        tir_mensual_valor = 0.0
+        
+        if tir_periodo_decimal is not None:
+            # Convertimos a porcentaje para mostrarlo (ej: 0.008 -> 0.8%)
+            tir_mensual_valor = tir_periodo_decimal * 100
+            
+            # Anualizamos para obtener la TCEA
             periodos_ano_tir = 360 / dias_por_periodo
-            tir_anual_cliente = ((1 + tir_periodo) ** periodos_ano_tir - 1) * 100
+            tcea_valor = ((1 + tir_periodo_decimal) ** periodos_ano_tir - 1) * 100
 
-        # 2. VAN
-        # Usamos la TASA DEL PRÉSTAMO (tasa_interes_periodo) como tasa de descuento.
-        # Si hay gastos extras, la TIR será mayor que esta tasa, y el VAN será negativo.
-        van_cliente = calcular_van_interno(flujos_caja, tasa_interes_periodo)
+        # 2. VAN Cliente (Perspectiva prestatario: Recibe +, Paga -)
+        # El resultado suele ser negativo, indicando el costo financiero total
+        van_cliente = calcular_van_interno(flujos_caja_cliente, tasa_interes_periodo)
+        
+        # 3. VAN Banco (Perspectiva inversionista: Presta -, Cobra +)
+        # Invertimos los signos: el préstamo es salida, las cuotas son entrada.
+        flujos_caja_banco = [-f for f in flujos_caja_cliente]
+        van_banco = calcular_van_interno(flujos_caja_banco, tasa_interes_periodo)
         
         # --- RETORNO ---
         total_pagado = sum(fila["cuota_total"] for fila in tabla[1:])
@@ -198,8 +198,12 @@ def simulate_credit(data):
             "tasa_efectiva_mensual": round(tasa_mensual * 100, 6),
             "tasa_efectiva_periodo": round(tasa_interes_periodo * 100, 6),
             
+            # === NUEVOS CAMPOS ===
             "van_cliente": round(van_cliente, 2),
-            "tir_cliente": round(tir_anual_cliente, 6) if tir_anual_cliente is not None else 0.0,
+            "van_banco": round(van_banco, 2),       # Nuevo
+            "tir_mensual": round(tir_mensual_valor, 6), # Nuevo
+            "tcea": round(tcea_valor, 2),           # Nuevo (TIR anualizada)
+            "tir_cliente": round(tcea_valor, 6),    # Mantener por compatibilidad si es necesario
             
             "tabla_amortizacion": [
                 {

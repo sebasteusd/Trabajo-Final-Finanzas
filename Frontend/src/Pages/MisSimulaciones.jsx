@@ -63,7 +63,7 @@ export default function MisSimulaciones({ user, token, onNavigateToSimulator }) 
                     
                     // Cálculos derivados (opcional, si no se guardaron en BD)
                     totalPagos: sim.plazo_anios * 12,
-                    totalEstimado: sim.cuota_mensual_estimada * (sim.plazo_anios * 12)
+                    totalEstimado: Number(sim.total_pagado || 0)
                 }));
 
                 setSimulaciones(mappedData);
@@ -168,7 +168,7 @@ export default function MisSimulaciones({ user, token, onNavigateToSimulator }) 
                 
                 <div className="text-center mb-12">
                     <h2 className="text-4xl font-bold text-gray-800 mb-8">
-                        ¡Bienvenido de vuelta, {user?.username}!
+                        Mis Simulaciones
                     </h2>
                     <p className="text-xl text-gray-600 max-w-2xl mx-auto">
                         Revisa tus simulaciones guardadas o genera una nueva proyección financiera.

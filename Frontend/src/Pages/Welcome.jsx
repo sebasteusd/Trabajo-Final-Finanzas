@@ -1,10 +1,12 @@
 import { useState, useEffect, useRef } from "react";
 import { HomeIcon, ChartIcon } from "../assets/icons";
+import { useNavigate } from "react-router-dom";
 import PropertyCard from "../Components/Cards/PropiedadCard.jsx"; 
 import AddPropertyModal from "../Components/AddPropertyModal.jsx";
 import PropertyDetailsModal from "../Components/PropertyDetailsModal.jsx";
 
 export default function Welcome({ user, token, onNavigateToSimulator }) {
+    const navigate = useNavigate();
     const [properties, setProperties] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
@@ -24,6 +26,20 @@ export default function Welcome({ user, token, onNavigateToSimulator }) {
 
     const filterOptions = ["Precio", "Lugar", "Area", "Estado", "Tipo"]; 
     const [selectedProperty, setSelectedProperty] = useState(null);
+
+    // 3. CREAR LA FUNCIÓN DE NAVEGACIÓN CON DATOS
+    const handleSimulateWithProperty = (propertyData) => {
+        navigate("/simulador", { 
+            state: { 
+                propertyData: propertyData 
+            } 
+        });
+    };
+
+    // Función para navegación simple (botón grande del dashboard)
+    const handleSimpleNavigation = () => {
+        navigate("/simulador");
+    };
 
     // --- CARGAR PROPIEDADES ---
     useEffect(() => {
@@ -176,7 +192,7 @@ export default function Welcome({ user, token, onNavigateToSimulator }) {
                             <div><h3 className="text-xl font-semibold text-gray-800">Mis Propiedades</h3><p className="text-gray-600">Gestiona y visualiza tus inmuebles</p></div>
                         </div>
                     </div>
-                    <div className="bg-gradient-to-r from-blue-500 to-purple-600 p-6 rounded-xl shadow-lg text-white cursor-pointer hover:shadow-xl transition-shadow" onClick={onNavigateToSimulator}>
+                    <div className="bg-gradient-to-r from-blue-500 to-purple-600 p-6 rounded-xl shadow-lg text-white cursor-pointer hover:shadow-xl transition-shadow" onClick={handleSimpleNavigation}>
                         <div className="flex items-center space-x-4">
                             <div className="bg-white/20 p-3 rounded-full"><ChartIcon width={28} height={28} stroke="#ffffffff" /></div>
                             <div><h3 className="text-xl font-semibold">Simulador de Créditos</h3><p className="opacity-90">Calcula y analiza opciones de financiamiento</p></div>
@@ -289,7 +305,7 @@ export default function Welcome({ user, token, onNavigateToSimulator }) {
                                     key={property.id}
                                     property={property}
                                     formatPrice={formatPrice}
-                                    onNavigateToSimulator={onNavigateToSimulator}
+                                    onNavigateToSimulator={() => handleSimulateWithProperty(property)}
                                     onClickDetails={() => setSelectedProperty(property)}
                                     token={token}
                                     initialIsFavorite={favoriteIds.has(property.id)}

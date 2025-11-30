@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useLocation } from "react-router-dom";
 import CreditForm from "../Components/CreditForm";
 import Results from "../Components/Results";
 import AmortizationTable from "../Components/AmortizacionTable";
@@ -14,6 +15,10 @@ export default function Simulador({ user, token, view, users }) {
   
   // --- NUEVO ESTADO: Loading del guardado ---
   const [saving, setSaving] = useState(false);
+
+  // 2. CAPTURAR LOS DATOS DE LA PROPIEDAD (SI EXISTEN)
+  const location = useLocation();
+  const propertyFromNavigation = location.state?.propertyData;
 
   const simulateCredit = async (payload) => {
     try {
@@ -46,38 +51,31 @@ export default function Simulador({ user, token, view, users }) {
     }
   };
 
-  // --- NUEVA FUNCIÓN: GUARDAR EN BASE DE DATOS ---
-  const handleSaveSimulation = async () => {
-    if (!result || !currentSimulationParams) return;
+    const handleSaveSimulation = async () => {
+        if (!result || !currentSimulationParams) return;
 
-    try {
-      setSaving(true);
+        try {
+          setSaving(true);
 
-      // 1. Preparamos el payload según el esquema "SimulationCreate" del backend
-      // Mapeamos los datos del formulario (currentSimulationParams) y del resultado (result)
-      const savePayload = {
-        // Datos descriptivos
-        nombre_producto_credito: currentSimulationParams.entidad_financiera || "Crédito Personalizado",
-        concepto_temporal: "Propiedad", // Puedes cambiar esto si agregas un selector de "Tipo Inmueble" al form
-        moneda: currentSimulationParams.moneda,
-        
-        // Datos financieros (Snapshot)
-        valor_inmueble: parseFloat(currentSimulationParams.valor_inmueble),
-        
-        // Calculamos la cuota inicial basada en el % enviado
-        cuota_inicial: parseFloat(currentSimulationParams.valor_inmueble) * (parseFloat(currentSimulationParams.porcentaje_inicial) / 100),
-        
-        // El monto financiado viene del cálculo o del input
-        monto_financiado: parseFloat(currentSimulationParams.monto) - parseFloat(currentSimulationParams.bono_techo_propio || 0),
-        
-        plazo_anios: Math.ceil(parseInt(currentSimulationParams.plazo_meses) / 12),
-        
-        // Guardamos la Tasa Efectiva del Periodo (la real aplicada)
-        tasa_interes_aplicada: parseFloat(result.tasa_efectiva_periodo),
-        
-        // Guardamos la primera cuota como referencia
-        cuota_mensual_estimada: parseFloat(result.primera_cuota_total)
-      };
+          const primeraFilaPago = result.tabla_amortizacion.find(fila => fila.periodo === 1);
+          const cuotaParaGuardar = primeraFilaPago ? primeraFilaPago.cuota_total : 0;
+
+          const savePayload = {
+            nombre_producto_credito: currentSimulationParams.entidad_financiera || "Crédito Personalizado",
+            // Si viene de una propiedad, usamos su ID, sino null
+            id_unidad: currentSimulationParams.id_unidad || null, 
+            // Si viene de una propiedad, usamos su tipo (ej: Casa), sino "Propiedad"
+            concepto_temporal: currentSimulationParams.concepto_temporal || "Propiedad", 
+            
+            moneda: currentSimulationParams.moneda,
+            valor_inmueble: parseFloat(currentSimulationParams.valor_inmueble),
+            cuota_inicial: parseFloat(currentSimulationParams.valor_inmueble) * (parseFloat(currentSimulationParams.porcentaje_inicial) / 100),
+            monto_financiado: parseFloat(currentSimulationParams.monto) - parseFloat(currentSimulationParams.bono_techo_propio || 0),
+            plazo_anios: Math.ceil(parseInt(currentSimulationParams.plazo_meses) / 12),
+            tasa_interes_aplicada: parseFloat(result.tasa_efectiva_periodo),
+            cuota_mensual_estimada: parseFloat(cuotaParaGuardar),
+            total_pagado: parseFloat(result.total_pagado)
+          };
 
       const res = await fetch("http://localhost:8000/api/simulations/", {
         method: "POST",
@@ -108,14 +106,20 @@ export default function Simulador({ user, token, view, users }) {
       <div className="max-w-[1700px] mx-auto px-6 py-4">
         {view === "tsa" && (
           <>
-            {/* Header de la sección */}
             <div className="text-center mb-8">
               <h2 className="text-3xl font-bold text-gray-800 mb-4">
                 Simulador de Créditos Hipotecarios
               </h2>
+              
+              {/* MENSAJE OPCIONAL: Avisar al usuario que está simulando una propiedad específica */}
+              {propertyFromNavigation && (
+                 <div className="bg-blue-100 text-blue-800 px-4 py-2 rounded-lg inline-block mb-2 font-medium animate-fade-in-up">
+                    🏡 Simulando para: {propertyFromNavigation.address}
+                 </div>
+              )}
+
               <p className="text-lg text-gray-600 max-w-2xl mx-auto">
-                Calcula tus cuotas, analiza diferentes escenarios y toma la mejor decisión 
-                para tu crédito hipotecario con nuestras herramientas avanzadas.
+                Calcula tus cuotas y guarda tus escenarios para compararlos luego.
               </p>
             </div>
 
@@ -125,13 +129,18 @@ export default function Simulador({ user, token, view, users }) {
               </div>
             )}
 
-            <div className="grid lg:grid-cols-6 gap-4">
-              {/* Formulario */}
+            <div className="grid lg:grid-cols-6 gap-6">
               <div className="lg:col-span-2">
-                <CreditForm onSimulate={simulateCredit} loading={loading} />
+                {/* 3. PASAR LOS DATOS AL FORMULARIO */}
+                <CreditForm 
+                  onSimulate={simulateCredit} 
+                  loading={loading} 
+                  initialData={propertyFromNavigation} 
+                  user={user}
+                  token={token}
+                />
               </div>
 
-              {/* Resultados */}
               <div className="lg:col-span-4">    
                 {loading ? (
                   <div className="bg-white rounded-xl shadow-lg p-8 text-center min-h-[400px] flex flex-col justify-center items-center">
@@ -140,25 +149,33 @@ export default function Simulador({ user, token, view, users }) {
                   </div>
                 ) : result ? (
                   <div className="space-y-6 animate-fade-in-up">
-                    {/* PASAMOS LAS PROPS AL COMPONENTE RESULTS */}
                     <Results 
                         data={result} 
                         inputs={currentSimulationParams} 
-                        onSave={handleSaveSimulation} // <--- Pasamos la función
-                        saving={saving}               // <--- Pasamos el estado
+                        onSave={handleSaveSimulation}
+                        saving={saving}
                     />
-                    <AmortizationTable tabla={result?.tabla_amortizacion} frecuencia={result?.frecuencia_pago} />
+                    <AmortizationTable 
+                    tabla={result?.tabla_amortizacion} 
+                    frecuencia={result?.frecuencia_pago} 
+                    // AGREGAMOS ESTE OBJETO 'resumen'
+                      resumen={{
+                          totalPagado: result.total_pagado,
+                          totalIntereses: result.intereses_pagados,
+                      }}
+                                      
+                    />
                   </div>
                 ) : (
-                  <div className="bg-white rounded-xl shadow-lg p-8 text-center">
-                    <div className="bg-blue-100 rounded-full w-16 h-16 flex items-center justify-center mx-auto mb-4">
-                      <ChartIcon width={28} height={28} fill="#1D4ED8" />
+                  <div className="bg-white rounded-xl shadow-lg p-12 text-center min-h-[400px] flex flex-col justify-center items-center">
+                    <div className="bg-blue-50 rounded-full w-24 h-24 flex items-center justify-center mb-6">
+                      <ChartIcon width={48} height={48} fill="#1D4ED8" />
                     </div>
-                    <h3 className="text-xl font-semibold text-gray-800 mb-2">
-                      Configura tu simulación
+                    <h3 className="text-2xl font-bold text-gray-800 mb-3">
+                      Empieza tu simulación
                     </h3>
-                    <p className="text-gray-600">
-                      Completa el formulario de la izquierda para ver los resultados de tu simulación de crédito.
+                    <p className="text-gray-500 max-w-md">
+                      Completa los datos del inmueble y financiamiento en el panel izquierdo para generar tu tabla de amortización detallada.
                     </p>
                   </div>
                 )}

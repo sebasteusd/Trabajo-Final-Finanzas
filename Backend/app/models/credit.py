@@ -81,12 +81,17 @@ class CreditOutput(BaseModel):
     tasa_efectiva_mensual: float
     tasa_efectiva_periodo: float
     
-    # === AQUÍ ESTABA EL ERROR: AGREGAR VAN Y TIR ===
+# === NUEVOS CAMPOS DE RENTABILIDAD ===
     van_cliente: Optional[float] = None
-    tir_cliente: Optional[float] = None
-    # ===============================================
-
-    tabla_amortizacion: List[AmortizationRow] 
+    van_banco: Optional[float] = None        # <--- NUEVO
+    
+    tir_mensual: Optional[float] = None      # <--- NUEVO (TIR Periodo)
+    tcea: Optional[float] = None   # <--- Renombramos o mapeamos tir_cliente aquí
+    
+    is_techo_propio_eligible: bool
+    techo_propio_status: str          
+    
+    tabla_amortizacion: List[AmortizationRow]
 
 
 # --- 3. ROUTER DE LA API ---

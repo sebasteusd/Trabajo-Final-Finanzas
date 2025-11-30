@@ -1,7 +1,8 @@
 import { ChartIcon, IdeaIcon } from "../assets/icons";
 import { useState } from "react";
 
-export default function AmortizationTable({ tabla, frecuencia = "mensual" }) {
+// 1. ACEPTAMOS LA NUEVA PROP 'resumen'
+export default function AmortizationTable({ tabla, frecuencia = "mensual", resumen }) {
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(12);
   const [showAll, setShowAll] = useState(false);
@@ -9,7 +10,6 @@ export default function AmortizationTable({ tabla, frecuencia = "mensual" }) {
   if (!tabla || tabla.length === 0) return null;
 
   const formatCurrency = (value) => {
-
     const val = Object.is(value, -0) ? 0 : value;
     return `S/ ${new Intl.NumberFormat('es-PE', {
       minimumFractionDigits: 2,
@@ -17,23 +17,22 @@ export default function AmortizationTable({ tabla, frecuencia = "mensual" }) {
     }).format(val)}`;
   };
 
-
-
   const dataRows = tabla.slice(1);
-
   const totalItems = tabla.length;
-
   const totalPages = Math.ceil(totalItems / itemsPerPage);
   const startIndex = (currentPage - 1) * itemsPerPage;
   const endIndex = startIndex + itemsPerPage;
-
   const currentData = showAll ? tabla : tabla.slice(startIndex, endIndex);
-
 
   const totalCuotas = dataRows.length;
 
-  const totalPagado = dataRows.reduce((sum, row) => sum + row.cuota_total, 0);
-  const totalIntereses = dataRows.reduce((sum, row) => sum + row.interes, 0);
+  // --- 2. ELIMINAMOS LOS CÁLCULOS MANUALES (CAUSANTES DEL ERROR) ---
+  // const totalPagado = dataRows.reduce((sum, row) => sum + row.cuota_total, 0); 
+  // const totalIntereses = dataRows.reduce((sum, row) => sum + row.interes, 0);
+  
+  // Usamos los valores exactos que vienen del Backend
+  const totalPagado = resumen?.totalPagado || 0;
+  const totalIntereses = resumen?.totalIntereses || 0;
   const totalAmortizacion = tabla.length > 0 ? tabla[0].saldo : 0;
 
   const goToPage = (page) => {
@@ -45,11 +44,12 @@ export default function AmortizationTable({ tabla, frecuencia = "mensual" }) {
     return `${isEvenRow ? 'bg-white' : 'bg-gray-50'} hover:bg-blue-50 transition-colors`;
   };
 
-
   const TIPO_PERIODO = frecuencia.charAt(0).toUpperCase() + frecuencia.slice(1);
 
   return (
     <div className="bg-white rounded-xl shadow-lg p-6">
+      {/* ... (El resto de tu JSX de cabecera y paginación sigue igual) ... */}
+      
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center space-x-3">
           <div className="bg-purple-100 p-2 rounded-full">
@@ -57,9 +57,9 @@ export default function AmortizationTable({ tabla, frecuencia = "mensual" }) {
           </div>
           <h2 className="text-xl font-semibold text-gray-800">Tabla de Amortización</h2>
         </div>
-        
-
-        <div className="flex items-center space-x-4">
+       
+        {/* ... controles de paginación ... */}
+         <div className="flex items-center space-x-4">
           <div className="flex items-center space-x-2">
             <label className="text-sm text-gray-600">Mostrar:</label>
             <select
@@ -88,7 +88,7 @@ export default function AmortizationTable({ tabla, frecuencia = "mensual" }) {
         </div>
       </div>
 
-
+      {/* --- AQUÍ SE MUESTRAN LOS TOTALES CORRECTOS --- */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6 p-4 bg-gray-50 rounded-lg">
         <div className="text-center">
           <p className="text-sm text-gray-600">Total Períodos</p>
@@ -114,10 +114,11 @@ export default function AmortizationTable({ tabla, frecuencia = "mensual" }) {
         </div>
       </div>
 
-      {/* --- Tabla --- */}
+      {/* ... (Tabla y resto del componente igual) ... */}
       <div className="overflow-x-auto rounded-lg border border-gray-200">
         <table className="min-w-full">
-          <thead className="bg-gradient-to-r from-blue-600 to-purple-600 text-white">
+            {/* ...thead... */}
+            <thead className="bg-gradient-to-r from-blue-600 to-purple-600 text-white">
             <tr>
               <th className="px-4 py-3 text-left text-sm font-semibold sticky left-0 bg-blue-600">{TIPO_PERIODO}</th>
               <th className="px-4 py-3 text-right text-sm font-semibold whitespace-nowrap">Cuota</th>
@@ -196,9 +197,9 @@ export default function AmortizationTable({ tabla, frecuencia = "mensual" }) {
           </tbody>
         </table>
       </div>
-
-      {/* --- Paginación --- */}
-      {!showAll && totalPages > 1 && (
+      
+      {/* ... (Paginación y Leyenda igual) ... */}
+       {!showAll && totalPages > 1 && (
         <div className="flex items-center justify-between mt-6">
           <div className="text-sm text-gray-600">
             Mostrando {startIndex + 1} a {Math.min(endIndex, totalItems)} de {totalItems} filas
@@ -265,7 +266,7 @@ export default function AmortizationTable({ tabla, frecuencia = "mensual" }) {
           <div><strong>Cuota (P+I):</strong> Suma de Interés + Amortización</div>
           <div><strong>Interés:</strong> Ganancia de la entidad financiera</div>
           <div><strong>Amortización:</strong> Parte que reduce tu deuda</div>
-          <div><strong>Seg. Desgrav.:</strong> Seguro de vida sobre el saldo</div>
+          <div><strong>Seg. Desg:</strong> Seguro de vida sobre el saldo</div>
           <div><strong>Seg. Bien:</strong> Seguro sobre el inmueble</div>
           <div><strong>Portes:</strong> Gastos administrativos</div>
           <div><strong>Saldo:</strong> Deuda pendiente después del pago</div>

@@ -25,7 +25,7 @@ class Simulacion(Base):
     plazo_anios = Column(Integer, nullable=False)
     tasa_interes_aplicada = Column(Float, nullable=False)
     cuota_mensual_estimada = Column(Float, nullable=False)
-    
+    total_pagado = Column(Float, nullable=False, default=0.0)
     concepto_temporal = Column(String, default="Propiedad")
     is_active = Column(Boolean, default=True)
 

@@ -1,4 +1,6 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react"; // 1. IMPORTAR useCallback
+import { Routes, Route, useNavigate, useLocation, Navigate } from "react-router-dom";
+
 import Home from "./Pages/Home";
 import Welcome from "./Pages/Welcome";
 import Simulador from "./Pages/Simulador";
@@ -6,178 +8,171 @@ import MisSimulaciones from "./Pages/MisSimulaciones";
 import Navbar from "./Components/Navbar";
 import Oportunities from "./Pages/Oportunities"; 
 import Favoritos from "./Pages/Favoritos"; 
-import MiPerfil from "./Pages/MiPerfil"; // 1. IMPORTAR MI PERFIL
+import MiPerfil from "./Pages/MiPerfil"; 
 
 export default function App() {
   const [token, setToken] = useState(null);
   const [user, setUser] = useState(null);
-
   const [view, setView] = useState("tsa"); 
-  
-  // Estados posibles: 'home', 'welcome', 'simulador', 'simulations', 'users', 'favorites', 'profile'
-  const [currentPage, setCurrentPage] = useState("home"); 
 
+  const navigate = useNavigate();
+  const location = useLocation();
   const LS_TOKEN = "tf_token";
-  const LS_VIEW = "tf_view";
-  const LS_PAGE = "tf_currentPage";
 
+  // --- 1. RESTAURAR TOKEN AL INICIO ---
   useEffect(() => {
-    const fetchUser = async () => {
-      if (token) {
-        try {
-          const res = await fetch("http://localhost:8000/api/auth/me", {
-            headers: { Authorization: `Bearer ${token}` },
-          });
-          if (!res.ok) throw new Error("Error al obtener usuario");
-          const data = await res.json();
-          setUser(data.usuario);
-          
-          const storedPage = localStorage.getItem(LS_PAGE);
-          const storedView = localStorage.getItem(LS_VIEW);
-          
-          if (storedPage && storedPage !== "home") {
-             setCurrentPage(storedPage);
-             setView(storedView || "welcome");
-          } else {
-             setCurrentPage("welcome");
-             setView("welcome");
-          }
-
-          try { localStorage.setItem(LS_TOKEN, token); } catch (err) { console.warn("localStorage set error", err); }
-        } catch (err) {
-          console.error(err);
-          setToken(null);
-          setCurrentPage("home");
-          try { localStorage.removeItem(LS_TOKEN); } catch (err) { console.warn("localStorage remove error", err); }
-        }
-      }
-    };
-    fetchUser();
-  }, [token]);
-
-  // Restore token
-  useEffect(() => {
-    try {
-      const storedToken = localStorage.getItem(LS_TOKEN);
-      if (storedToken) setToken(storedToken);
-    } catch (err) {
-      console.warn("localStorage read error", err);
+    const storedToken = localStorage.getItem(LS_TOKEN);
+    if (storedToken) {
+        setToken(storedToken);
     }
   }, []);
 
-  // Persist state
-  useEffect(() => {
-    try { if (view) localStorage.setItem(LS_VIEW, view); } catch (err) { console.warn("localStorage set error", err); }
-  }, [view]);
-
-  useEffect(() => {
-    try { if (currentPage) localStorage.setItem(LS_PAGE, currentPage); } catch (err) { console.warn("localStorage set error", err); }
-  }, [currentPage]);
-
-  const handleLogin = (newToken) => {
-    setToken(newToken);
-    try { localStorage.setItem(LS_TOKEN, newToken); } catch (err) { console.warn("localStorage set error", err); }
-  };
-
-  const handleNavigateToSimulator = () => {
-    setCurrentPage("simulador");
-    setView("tsa"); 
-  };
-
-  // --- LÓGICA DE NAVEGACIÓN ACTUALIZADA ---
-  const handleViewChange = (newView) => {
-    if (newView === "welcome") {
-      setCurrentPage("welcome");
-      setView("welcome");
-    
-    } else if (newView === "simulations") {
-      setCurrentPage("simulations");
-      setView("simulations");
-      
-    } else if (newView === "users") { 
-      setCurrentPage("users"); 
-      setView("users");
-      
-    } else if (newView === "favorites") { 
-      setCurrentPage("favorites");
-      setView("favorites");
-
-    } else if (newView === "profile") { 
-      // 2. NUEVA LÓGICA PARA PERFIL
-      setCurrentPage("profile");
-      setView("profile");
-
-    } else {
-      // El resto (tsa) sigue yendo al Layout del Simulador
-      setCurrentPage("simulador");
-      setView(newView);
-    }
-  };
-
+  // --- MANEJADOR DE LOGOUT (Lo defino antes para usarlo en reloadUser) ---
   const handleLogout = () => {
     setToken(null);
     setUser(null);
-    setView("tsa"); 
-    setCurrentPage("home");
-    try { localStorage.removeItem(LS_TOKEN); } catch (err) { console.warn("localStorage remove error", err); }
-    try { localStorage.removeItem(LS_VIEW); } catch (err) { console.warn("localStorage remove error", err); }
-    try { localStorage.removeItem(LS_PAGE); } catch (err) { console.warn("localStorage remove error", err); }
+    localStorage.removeItem(LS_TOKEN);
+    navigate("/"); 
   };
 
-  if (!token || currentPage === "home") {
+  // --- 2. FUNCIÓN DE RECARGA DE USUARIO (NUEVO) ---
+  // Esta función se la pasaremos a MiPerfil para que la llame al guardar cambios
+  const reloadUser = useCallback(async () => {
+    if (!token) return;
+    try {
+      const res = await fetch("http://localhost:8000/api/auth/me", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error("Error al obtener usuario");
+      const data = await res.json();
+      setUser(data.usuario);
+    } catch (err) {
+      console.error(err);
+      handleLogout(); 
+    }
+  }, [token]);
+
+  // --- 3. USAR LA FUNCIÓN EN EL EFECTO INICIAL ---
+  useEffect(() => {
+    const initUser = async () => {
+        if (token) {
+           await reloadUser(); // Cargamos el usuario
+           // Redirección inicial si estamos en la raíz
+           if (location.pathname === "/") {
+              navigate("/welcome");
+           }
+        }
+    };
+    initUser();
+  }, [token, reloadUser]); // Dependencias actualizadas
+
+  // --- MANEJADORES ---
+  const handleLogin = (newToken) => {
+    setToken(newToken);
+    localStorage.setItem(LS_TOKEN, newToken);
+    navigate("/welcome");
+  };
+
+  const handleViewChange = (newView) => {
+    setView(newView);
+    switch (newView) {
+        case "welcome": navigate("/welcome"); break;
+        case "simulations": navigate("/mis-simulaciones"); break;
+        case "users": navigate("/oportunidades"); break;
+        case "favorites": navigate("/favoritos"); break;
+        case "profile": navigate("/perfil"); break;
+        default: navigate("/simulador"); break;
+    }
+  };
+
+  const handleNavigateToSimulator = () => {
+    navigate("/simulador");
+  };
+
+  // --- RENDERIZADO ---
+  if (!token) {
     return <Home onLogin={handleLogin} />;
+  }
+
+  if (token && !user) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-blue-50">
+        <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+            <p className="text-blue-600 font-semibold">Cargando perfil...</p>
+        </div>
+      </div>
+    );
   }
 
   return (
     <>
       <Navbar user={user} view={view} onChangeView={handleViewChange} onLogout={handleLogout} />
 
-      {currentPage === "welcome" && (
-        <Welcome
-          user={user}
-          token={token}
-          onNavigateToSimulator={handleNavigateToSimulator}
-        />
-      )}
+      <Routes>
+        <Route path="/" element={<Navigate to="/welcome" />} />
 
-      {currentPage === "simulations" && (
-        <MisSimulaciones
-          user={user}
-          token={token}
-          onNavigateToSimulator={handleNavigateToSimulator}
+        <Route 
+            path="/welcome" 
+            element={
+                <Welcome 
+                    user={user} 
+                    token={token} 
+                    onNavigateToSimulator={handleNavigateToSimulator} 
+                />
+            } 
         />
-      )}
 
-      {currentPage === "users" && (
-        <Oportunities token={token} />
-      )}
-
-      {currentPage === "favorites" && (
-        <Favoritos 
-            user={user}
-            token={token}
-            onNavigateToSimulator={handleNavigateToSimulator}
+        <Route 
+            path="/simulador" 
+            element={
+                <Simulador 
+                    user={user} 
+                    token={token} 
+                    view="tsa" 
+                    users={[]} 
+                />
+            } 
         />
-      )}
 
-      {/* 3. RENDERIZADO DE LA PÁGINA PERFIL */}
-      {currentPage === "profile" && (
-        <MiPerfil 
-            user={user}
-            token={token}
+        <Route 
+            path="/mis-simulaciones" 
+            element={
+                <MisSimulaciones 
+                    user={user} 
+                    token={token} 
+                    onNavigateToSimulator={handleNavigateToSimulator} 
+                />
+            } 
         />
-      )}
 
-      {currentPage === "simulador" && (
-        <Simulador
-          user={user}
-          token={token}
-          onLogout={handleLogout}
-          onChangeView={handleViewChange}
-          view={view}
-          users={[]} 
+        <Route path="/oportunidades" element={<Oportunities token={token} />} />
+        
+        <Route 
+            path="/favoritos" 
+            element={
+                <Favoritos 
+                    user={user} 
+                    token={token} 
+                    onNavigateToSimulator={handleNavigateToSimulator} 
+                />
+            } 
         />
-      )}
+
+        {/* --- 4. AQUÍ PASAMOS LA PROP 'onProfileUpdate' --- */}
+        <Route 
+            path="/perfil" 
+            element={
+                <MiPerfil 
+                    user={user} 
+                    token={token} 
+                    onProfileUpdate={reloadUser} // <--- CLAVE PARA QUE SE ACTUALICE
+                />
+            } 
+        />
+        
+        <Route path="*" element={<Navigate to="/welcome" />} />
+      </Routes>
     </>
   );
 }

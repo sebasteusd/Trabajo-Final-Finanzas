@@ -1,8 +1,6 @@
 from pydantic import BaseModel, EmailStr, Field
 from typing import Optional, List
 from datetime import date, datetime
-from pydantic import BaseModel
-from typing import Optional
 
 # ==========================================
 # 1. ESQUEMAS DE CLIENTE (Datos Financieros)
@@ -10,6 +8,8 @@ from typing import Optional
 class ClientBase(BaseModel):
     ingresos_mensuales: Optional[float] = 0.0
     tipo_trabajador: Optional[str] = None
+    
+    # Agregamos estos al base para que estén disponibles siempre
     estado_civil: Optional[str] = None
     consentimiento_datos: bool = False
 
@@ -20,6 +20,40 @@ class ClientRead(ClientBase):
     id_cliente: int
     user_id: int
     
+    # === CAMPOS NUEVOS (Perfilado Progresivo) ===
+    # Es vital ponerlos aquí para que el frontend los pueda leer al hacer F5
+    antiguedad_laboral: Optional[int] = 0
+    numero_hijos: Optional[int] = 0
+    ahorro_inicial_disponible: Optional[float] = 0.0
+    tiene_deudas_vigentes: Optional[bool] = False
+    pago_mensual_deudas: Optional[float] = 0.0
+    # === DECLARACIONES JURADAS (BFH) ===
+    no_propiedad_previa: Optional[bool] = False
+    no_bono_previo: Optional[bool] = False
+    
+    # Campos CRM (Opcionales para visualización)
+    estado_seguimiento: Optional[str] = "NUEVO"
+    scoring_credito: Optional[int] = 0
+
+    class Config:
+        from_attributes = True
+
+class ClientUpdate(BaseModel):
+    ingresos_mensuales: Optional[float] = None
+    tipo_trabajador: Optional[str] = None
+    
+    # Nuevos campos opcionales para actualización
+    estado_civil: Optional[str] = None
+    antiguedad_laboral: Optional[int] = None
+    numero_hijos: Optional[int] = None
+    ahorro_inicial_disponible: Optional[float] = None
+    tiene_deudas_vigentes: Optional[bool] = None
+    pago_mensual_deudas: Optional[float] = None
+    # === [NUEVOS] DECLARACIONES JURADAS BFH ===
+    no_propiedad_previa: Optional[bool] = None
+    no_bono_previo: Optional[bool] = None
+    consentimiento_datos: Optional[bool] = None
+
     class Config:
         from_attributes = True
 
@@ -49,10 +83,24 @@ class UserRead(UserBase):
     fecha_creacion: Optional[datetime] = None
     foto_perfil: Optional[str] = None
     
+    # Aquí se anida el ClientRead completo con los nuevos campos
     client: Optional[ClientRead] = None
     
     nombre: str = Field(validation_alias="nombres")
     apellido: str = Field(validation_alias="apellidos")
+
+    class Config:
+        from_attributes = True
+
+class UserUpdate(BaseModel):
+    nombres: Optional[str] = None
+    apellidos: Optional[str] = None
+    telefono: Optional[str] = None
+    dni: Optional[str] = None
+    direccion: Optional[str] = None
+    
+    email: Optional[str] = None 
+    username: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -69,7 +117,7 @@ class TokenResponse(Token):
     pass
 
 # ==========================================
-# 4. ESQUEMAS DE ENTIDADES FINANCIERAS (NUEVO)
+# 4. ESQUEMAS DE ENTIDADES FINANCIERAS
 # ==========================================
 class FinancialEntityBase(BaseModel):
     nombre: str
@@ -88,14 +136,12 @@ class FinancialEntityRead(FinancialEntityBase):
         from_attributes = True
 
 # ==========================================
-# 5. ESQUEMAS DE INMUEBLES (NUEVO)
+# 5. ESQUEMAS DE INMUEBLES
 # ==========================================
 
-# Esquema para las fotos dentro del inmueble
 class PropertyPhotoRead(BaseModel):
     url_foto: str
     orden: int
-    
     class Config:
         from_attributes = True
 
@@ -114,77 +160,40 @@ class PropertyRead(PropertyBase):
     id_unidad: int
     moneda_venta: str
     estado: str
-    
-    # Aquí anidamos las fotos para que el frontend pueda mostrarlas en el carrusel
     fotos: List[PropertyPhotoRead] = []
-
     class Config:
         from_attributes = True
 
-# Esquema para recibir una foto al crear
 class PropertyPhotoCreate(BaseModel):
     url_foto: str
 
-# Esquema para crear la propiedad (Hereda de PropertyBase pero hace opcionales ciertos campos)
 class PropertyCreate(PropertyBase):
-    # Hacemos 'proyecto' opcional porque en el formulario frontend no lo pedimos explícitamente
     proyecto: Optional[str] = "Sin Proyecto" 
-    
-    # Campos para recibir las fotos desde el frontend
     url_foto: Optional[str] = None
     fotos: List[PropertyPhotoCreate] = []
-
-    class Config:
-        from_attributes = True
-
-# === AGREGA ESTA CLASE ===
-class UserUpdate(BaseModel):
-    nombres: Optional[str] = None
-    apellidos: Optional[str] = None
-    telefono: Optional[str] = None
-    dni: Optional[str] = None
-    direccion: Optional[str] = None
-    
-    # Opcionales si quieres permitir cambiarlos (cuidado con duplicados en BD)
-    email: Optional[str] = None 
-    username: Optional[str] = None
-
-    class Config:
-        from_attributes = True
-
-# === AGREGA ESTO EN LA SECCIÓN DE CLIENTE ===
-class ClientUpdate(BaseModel):
-    ingresos_mensuales: Optional[float] = None
-    tipo_trabajador: Optional[str] = None
-    estado_civil: Optional[str] = None
-    consentimiento_datos: Optional[bool] = None
-
     class Config:
         from_attributes = True
 
 # ==========================================
-# 6. ESQUEMAS DE SIMULACIÓN DE CRÉDITO (AGREGAR ESTO)
+# 6. ESQUEMAS DE SIMULACIÓN DE CRÉDITO
 # ==========================================
 
 class CreditSimulationInput(BaseModel):
     monto: float
     plazo_meses: int
     tasa: float
-    tipo_tasa: str  # "efectiva" o "nominal"
-    capitalizacion: Optional[str] = None # Solo si es nominal
+    tipo_tasa: str  
+    capitalizacion: Optional[str] = None 
     frecuencia_pago: str = "mensual"
-    gracia: str = "sin_gracia" # "total", "parcial", "sin_gracia"
+    gracia: str = "sin_gracia" 
     bono_techo_propio: Optional[float] = 0.0
     
-    # Costos adicionales para la tabla
     pct_seguro_desgravamen_anual: Optional[float] = 0.0
     seguro_bien_monto: Optional[float] = 0.0
     portes_monto: Optional[float] = 0.0
     gastos_iniciales: Optional[float] = 0.0
     
-    # === CAMPO CRÍTICO PARA EL VAN ===
-    # Si no envías esto, el VAN no funciona correctamente.
-    cok: float = Field(default=0.0, description="Costo de Oportunidad (Tasa de Descuento Anual)")
+    cok: float = Field(default=0.0, description="Costo de Oportunidad")
 
     class Config:
         from_attributes = True
@@ -193,15 +202,12 @@ class CreditSimulationInput(BaseModel):
 # 7. ESQUEMAS PARA GUARDAR/LEER SIMULACIONES
 # ==========================================
 
-# Lo que recibimos del Frontend para GUARDAR en BD
 class SimulationCreate(BaseModel):
-    # IDs opcionales (si vienen de una propiedad/banco específico)
     id_unidad: Optional[int] = None
     id_entidad: Optional[int] = None
     
-    # Datos del Snapshot
     nombre_producto_credito: str = "Crédito Hipotecario"
-    concepto_temporal: str = "Propiedad" # Casa, Depa, Terreno
+    concepto_temporal: str = "Propiedad"
     
     moneda: str = "PEN"
     valor_inmueble: float
@@ -210,9 +216,8 @@ class SimulationCreate(BaseModel):
     plazo_anios: int
     tasa_interes_aplicada: float
     cuota_mensual_estimada: float
+    total_pagado: float # Agregado según requerimiento anterior
 
-# Lo que enviamos al Frontend para mostrar en las CARDS
-# --- CORRECCIÓN AQUÍ: AGREGAMOS LOS CAMPOS FALTANTES ---
 class SimulationRead(BaseModel):
     id_simulacion: int
     fecha_simulacion: datetime
@@ -221,12 +226,12 @@ class SimulationRead(BaseModel):
     nombre_producto_credito: str
     monto_financiado: float
     
-    # CAMPOS NUEVOS PARA EL MODAL DETALLADO
-    valor_inmueble: float        # <--- Agregado
-    cuota_inicial: float         # <--- Agregado
-    tasa_interes_aplicada: float # <--- Agregado
+    valor_inmueble: float        
+    cuota_inicial: float         
+    tasa_interes_aplicada: float 
     
     cuota_mensual_estimada: float
+    total_pagado: float
     plazo_anios: int
     moneda: str
 

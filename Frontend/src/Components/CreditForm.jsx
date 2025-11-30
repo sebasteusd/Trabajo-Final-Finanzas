@@ -1,5 +1,7 @@
 import { useState, useEffect } from "react";
 import { CreditIcon, RocketIcon, IdeaIcon } from "../assets/icons"; 
+// 1. IMPORTAR COMPONENTE TOOLTIP
+import Tooltip from "../Components/ToolTip";
 
 const API_URL = "http://localhost:8000"; 
 
@@ -66,18 +68,12 @@ export default function CreditForm({ onSimulate, loading, initialData, user }) {
     setEligibility({ isEligible: true, reason: "APTO. Cumples los requisitos para postular al Bono Techo Propio (AVN)." });
   }, [user]);
 
-  // Efecto para sincronizar el monto del bono cuando cambia la elegibilidad
   useEffect(() => {
     const MONTO_FIJO_BONO = 46545;
-    // Solo reseteamos si NO estamos restaurando una simulación (applyBono manual tiene prioridad en restauración)
-    // Pero como applyBono es un estado reactivo, necesitamos tener cuidado.
-    // La lógica aquí asume comportamiento por defecto al cargar.
     if (eligibility.isEligible === false) {
       setApplyBono(false);
       setForm(prev => ({ ...prev, bono_techo_propio: 0 }));
     }
-    // Nota: Si es eligible, no forzamos true automáticamente aquí para no sobrescribir 
-    // la restauración de datos si el usuario lo había desmarcado antes.
   }, [eligibility.isEligible]);
 
   const handleApplyBonoToggle = (e) => {
@@ -87,22 +83,18 @@ export default function CreditForm({ onSimulate, loading, initialData, user }) {
     setForm(prev => ({ ...prev, bono_techo_propio: checked ? MONTO_FIJO_BONO : 0 }));
   };
 
-  // --- 🔥 AUTO-RELLENAR INTELIGENTE (ACTUALIZADO) ---
+  // --- AUTO-RELLENAR INTELIGENTE ---
   useEffect(() => {
     if (initialData) {
       console.log("Datos recibidos en CreditForm:", initialData);
 
-      // CASO A: RESTAURACIÓN COMPLETA (Viene de "Recalcular" con backup JSON)
       if (initialData.datos_input) {
         const saved = initialData.datos_input;
-        
         console.log("Restaurando simulación desde backup...", saved);
 
         setForm(prev => ({
           ...prev, 
-          ...saved, // Sobrescribe el estado con el backup completo
-          
-          // Aseguramos tipos numéricos (parsear por si acaso)
+          ...saved,
           valor_inmueble: parseFloat(saved.valor_inmueble),
           porcentaje_inicial: parseFloat(saved.porcentaje_inicial),
           monto: parseFloat(saved.monto),
@@ -112,23 +104,19 @@ export default function CreditForm({ onSimulate, loading, initialData, user }) {
           pct_seguro_desgravamen_anual: parseFloat(saved.pct_seguro_desgravamen_anual),
           seguro_bien_monto: parseFloat(saved.seguro_bien_monto),
           portes_monto: parseFloat(saved.portes_monto),
-          
           entidad_financiera: saved.entidad_financiera || "",
           id_unidad: saved.id_unidad || null,
           concepto_temporal: saved.concepto_temporal || "Propiedad"
         }));
 
-        // Restaurar estado visual del Checkbox del Bono
         if (parseFloat(saved.bono_techo_propio) > 0) {
           setApplyBono(true);
         } else {
           setApplyBono(false);
         }
-
-        return; // 🛑 DETENER AQUÍ. No usar la lógica de estimación de abajo.
+        return; 
       }
 
-      // CASO B: ESTIMACIÓN INICIAL (Viene de "Ver Propiedad" o simulación antigua)
       const valorRaw = initialData.valorInmueble || initialData.valor_inmueble || initialData.price || 0;
       const valor = parseFloat(valorRaw);
 
@@ -161,7 +149,6 @@ export default function CreditForm({ onSimulate, loading, initialData, user }) {
       }));
     }
   }, [initialData]);
-  // --------------------------------------------------------
 
   // --- CARGAR ENTIDADES ---
   useEffect(() => {
@@ -241,13 +228,19 @@ export default function CreditForm({ onSimulate, loading, initialData, user }) {
   const handleSubmit = (e) => {
     e.preventDefault();
     const nombreFinal = form.entidad_financiera || "Personalizado";
+    
+    let capitalizacionEnvio = form.capitalizacion;
+    if (form.tipo_tasa === "nominal" && !capitalizacionEnvio) {
+        capitalizacionEnvio = "mensual"; 
+    }
+
     const payload = {
       ...form,
       monto: parseFloat(montoPrestamo), 
       entidad_financiera: nombreFinal,
       tasa: parseFloat(form.tasa),
       plazo_meses: parseInt(form.plazo_meses),
-      capitalizacion: form.tipo_tasa === "nominal" ? form.capitalizacion : null,
+      capitalizacion: form.tipo_tasa === "nominal" ? capitalizacionEnvio : null,
       bono_techo_propio: parseFloat(form.bono_techo_propio),
       pct_seguro_desgravamen_anual: parseFloat(form.pct_seguro_desgravamen_anual),
       seguro_bien_monto: parseFloat(form.seguro_bien_monto),
@@ -355,14 +348,32 @@ export default function CreditForm({ onSimulate, loading, initialData, user }) {
                 <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none"><span className="text-gray-400 text-sm">S/</span></div>
               </div>
             </div>
-            <div><label className="block text-sm font-medium text-gray-700 mb-2">Plazo (Meses)</label><input name="plazo_meses" type="number" value={form.plazo_meses} onChange={handleChange} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500" /></div>
-            <div><label className="block text-sm font-medium text-gray-700 mb-2">Tasa Interés (%)</label><input name="tasa" type="number" value={form.tasa} onChange={handleChange} step="0.01" className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500" /></div>
+            
+            {/* 🔥 TOOLTIPS AGREGADOS AQUÍ 🔥 */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Tipo de Tasa</label>
+                <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center">
+                    Plazo (Meses)
+                    <Tooltip text="Duración total del crédito. Ej: 240 meses = 20 años." />
+                </label>
+                <input name="plazo_meses" type="number" value={form.plazo_meses} onChange={handleChange} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500" />
+            </div>
+            
+            <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center">
+                    Tasa Interés (%)
+                    <Tooltip text="Porcentaje que cobra el banco por prestarte el dinero (Anual)." />
+                </label>
+                <input name="tasa" type="number" value={form.tasa} onChange={handleChange} step="0.01" className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500" />
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center">
+                  Tipo de Tasa
+                  <Tooltip text="Efectiva: Incluye capitalización. Nominal: Tasa base sin capitalización." />
+              </label>
               <select name="tipo_tasa" value={form.tipo_tasa} onChange={handleChange} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"><option value="efectiva">Efectiva Anual</option><option value="nominal">Nominal Anual</option></select>
             </div>
             
-            {/* === FRECUENCIA DE PAGO COMPLETA === */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">Frecuencia Pago</label>
               <select name="frecuencia_pago" value={form.frecuencia_pago} onChange={handleChange} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
@@ -377,10 +388,12 @@ export default function CreditForm({ onSimulate, loading, initialData, user }) {
               </select>
             </div>
 
-            {/* === CAPITALIZACIÓN COMPLETA (Solo si es Nominal) === */}
             {form.tipo_tasa === "nominal" && (
               <div className="md:col-span-2">
-                <label className="block text-sm font-medium text-gray-700 mb-2">Capitalización</label>
+                <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center">
+                    Capitalización
+                    <Tooltip text="Frecuencia con la que los intereses se suman al capital (Solo para Tasa Nominal)." />
+                </label>
                 <select name="capitalizacion" value={form.capitalizacion} onChange={handleChange} className="w-full px-3 py-2 border border-gray-300 rounded-lg">
                   <option value="diaria">Diaria</option>
                   <option value="quincenal">Quincenal</option>
@@ -402,7 +415,12 @@ export default function CreditForm({ onSimulate, loading, initialData, user }) {
           
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-start">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2 h-10 flex items-end pb-1">Seg. Desgravamen (%)</label>
+              <label className="block text-sm font-medium text-gray-700 mb-2 h-10 flex items-end pb-1">
+                  <span className="flex items-center">
+                      Seg. Desgravamen (%)
+                      <Tooltip text="Seguro de vida que cubre la deuda en caso de fallecimiento." />
+                  </span>
+              </label>
               <div className="relative">
                 <input name="pct_seguro_desgravamen_anual" type="number" value={form.pct_seguro_desgravamen_anual} onChange={handleChange} min="0" step="0.0001" className="w-full pl-3 pr-8 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500" />
                 <span className="absolute right-3 top-2 text-gray-500 text-sm">%</span>
@@ -410,7 +428,12 @@ export default function CreditForm({ onSimulate, loading, initialData, user }) {
               <p className="text-[11px] text-gray-500 mt-1 leading-tight">≈ {currencySymbol} {formatNumber(montoPrestamo * (form.pct_seguro_desgravamen_anual / 100))} <br/> mensuales</p>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2 h-10 flex items-end pb-1">Seguro del Inmueble</label>
+              <label className="block text-sm font-medium text-gray-700 mb-2 h-10 flex items-end pb-1">
+                  <span className="flex items-center">
+                      Seguro del Inmueble
+                      <Tooltip text="Seguro contra incendios, terremotos y daños a la propiedad." />
+                  </span>
+              </label>
               <div className="relative">
                 <input name="seguro_bien_monto" type="number" value={form.seguro_bien_monto} onChange={handleChange} min="0" step="0.01" className="w-full pl-3 pr-10 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500" />
                 <span className="absolute right-3 top-2 text-gray-500 text-sm font-bold">{currencySymbol}</span>
@@ -433,7 +456,10 @@ export default function CreditForm({ onSimulate, loading, initialData, user }) {
            <h3 className="text-lg font-medium text-gray-800 mb-4">Beneficios y Periodos</h3>
            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-end">
              <div>
-               <label className="block text-sm font-medium text-gray-700 mb-2">Periodo de Gracia</label>
+               <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center">
+                   Periodo de Gracia
+                   <Tooltip text="Tiempo en el que no pagas la cuota completa. Total: No pagas nada (capitaliza). Parcial: Solo pagas intereses." />
+               </label>
                <select name="gracia" value={form.gracia} onChange={handleChange} className="w-full px-3 py-2 border border-gray-300 rounded-lg">
                  <option value="ninguna">Sin periodo de gracia</option>
                  <option value="parcial">Gracia parcial (Paga Interés)</option>
@@ -442,7 +468,10 @@ export default function CreditForm({ onSimulate, loading, initialData, user }) {
              </div>
              <div>
                 <div className="flex items-center justify-between mb-2">
-                  <label className="block text-sm font-medium text-gray-700">Bono Techo Propio</label>
+                  <label className="block text-sm font-medium text-gray-700 flex items-center">
+                      Bono Techo Propio
+                      <Tooltip text="Subsidio estatal (BFH) de S/ 46,545 para primera vivienda." />
+                  </label>
                   <div className="flex items-center gap-2">
                     <input
                       id="applyBono"

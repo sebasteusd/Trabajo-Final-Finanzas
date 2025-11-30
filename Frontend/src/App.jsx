@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { Routes, Route, useNavigate, useLocation, Navigate } from "react-router-dom";
 
+// --- PÁGINAS ---
 import Home from "./Pages/Home";
 import Welcome from "./Pages/Welcome";
 import Simulador from "./Pages/Simulador";
@@ -11,10 +12,10 @@ import Favoritos from "./Pages/Favoritos";
 import MiPerfil from "./Pages/MiPerfil"; 
 import Ayuda from "./Pages/Ayuda";
 
+// --- COMPONENTES GLOBALES ---
 import ProtectedRoute from "./Components/ProtectedRoute"; 
-
-// 1. IMPORTAR EL FOOTER GLOBAL
-import Footer from "./Components/Footer"; 
+import Footer from "./Components/Footer"; // Footer Global
+import ChatbotWidget from "./Components/ChatbotWidget"; // Chatbot (Si decides mantenerlo)
 
 export default function App() {
   const [token, setToken] = useState(null);
@@ -92,15 +93,14 @@ export default function App() {
     );
   }
 
-  // --- 3. RENDERIZADO PRINCIPAL CON LAYOUT FLEX ---
+  // --- 3. LAYOUT PRINCIPAL (Sticky Footer) ---
   return (
-    // Contenedor principal que ocupa toda la altura
     <div className="min-h-screen flex flex-col font-['Poppins']">
       
-      {/* Navbar fija en la parte superior (si hay usuario) */}
+      {/* Navbar Privada (Solo si hay usuario logueado) */}
       {user && <Navbar user={user} view={view} onChangeView={handleViewChange} onLogout={handleLogout} />}
 
-      {/* Contenedor de contenido: Crece para empujar el footer abajo */}
+      {/* Contenido Flexible */}
       <div className="flex-grow bg-gray-50">
           <Routes>
             
@@ -110,10 +110,11 @@ export default function App() {
                 element={!token ? <Home onLogin={handleLogin} /> : <Navigate to="/welcome" />} 
             />
 
-            {/* Nueva Ruta Pública: Centro de Ayuda */}
+            {/* === RUTA PÚBLICA (AYUDA) === */}
+            {/* Se le pasa 'user' para que decida qué Navbar mostrar dentro */}
             <Route path="/ayuda" element={<Ayuda user={user} />} />
             
-            {/* === RUTAS PROTEGIDAS (Requieren Token) === */}
+            {/* === RUTAS PROTEGIDAS (Usuarios Logueados) === */}
             <Route element={<ProtectedRoute isAllowed={!!token} />}>
                 
                 <Route 
@@ -143,7 +144,7 @@ export default function App() {
 
             </Route> 
 
-            {/* === RUTA SOLO PARA ADMIN === */}
+            {/* === RUTA SOLO PARA ADMIN (CRM) === */}
             <Route element={<ProtectedRoute isAllowed={!!token && user?.role === 'admin'} redirectTo="/welcome" />}>
                 <Route path="/oportunidades" element={<Oportunities token={token} />} />
             </Route>
@@ -154,8 +155,11 @@ export default function App() {
           </Routes>
       </div>
 
-      {/* Footer GLOBAL (Siempre al final) */}
+      {/* Footer Global (Siempre al final) */}
       <Footer />
+
+      {/* Chatbot Global (Opcional, si lo estás usando) */}
+      <ChatbotWidget user={user} />
       
     </div>
   );

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import LoginForm from "../Components/LoginForm";
 import RegisterForm from "../Components/RegisterForm";
-import Logo from "../assets/logo.png";
+import Logo from "../assets/Logo.png";
 
 export default function LoginRegister({ onLogin, onBackToHome }) {
   const [currentView, setCurrentView] = useState("login");

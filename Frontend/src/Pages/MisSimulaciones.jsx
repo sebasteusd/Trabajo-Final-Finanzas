@@ -51,6 +51,10 @@ export default function MisSimulaciones({ user, token, onNavigateToSimulator }) 
                     monto: sim.monto_financiado,
                     tipoCredito: sim.nombre_producto_credito,
                     
+                    // 🔥🔥🔥 AQUÍ ESTÁ EL CAMBIO CLAVE 🔥🔥🔥
+                    // Guardamos el JSON crudo para pasarlo al modal y luego al formulario
+                    datos_input: sim.datos_input, 
+
                     // === DATOS DETALLADOS PARA EL MODAL ===
                     cuotaMensual: sim.cuota_mensual_estimada,
                     plazoAnios: sim.plazo_anios,
@@ -59,10 +63,10 @@ export default function MisSimulaciones({ user, token, onNavigateToSimulator }) 
                     // Datos originales del Snapshot
                     valorInmueble: sim.valor_inmueble,
                     cuotaInicial: sim.cuota_inicial,
-                    tasaInteres: sim.tasa_interes_aplicada, // La tasa guardada
+                    tasaInteres: sim.tasa_interes_aplicada, 
                     
-                    // Cálculos derivados (opcional, si no se guardaron en BD)
-                    totalPagos: sim.plazo_anios * 12,
+                    // Cálculos derivados
+                    totalPagos: sim.plazo_anios * 12, // Esto ahora usa el float (ej: 1.5 * 12 = 18)
                     totalEstimado: Number(sim.total_pagado || 0)
                 }));
 
@@ -302,14 +306,13 @@ export default function MisSimulaciones({ user, token, onNavigateToSimulator }) 
                         <div className="flex flex-wrap gap-8 justify-center">
                             {filteredSimulaciones.map((sim) => (
                                 <SimulacionCard
-                                    key={sim.realId} // Usamos ID real para la key de React
-                                    id={sim.id}      // Usamos el ID formateado para mostrar
+                                    key={sim.realId} 
+                                    id={sim.id}      
                                     fecha={sim.fecha}
                                     monto={sim.monto}
                                     tipoCredito={sim.tipoCredito}
                                     categoria={sim.concepto}
                                     onDelete={() => handleDelete(sim.realId)}
-                                    // AHORA SÍ: Conectamos la acción al handler del modal
                                     onViewDetails={() => handleViewDetails(sim)}
                                 />
                             ))}

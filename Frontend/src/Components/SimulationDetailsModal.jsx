@@ -1,18 +1,24 @@
 import React from "react";
+// 1. Importamos el hook para navegar
+import { useNavigate } from "react-router-dom";
+
 import { 
   ChartIcon, 
   HomeIcon, 
-  CreditIcon, // Asegúrate de tener este icono o usa uno genérico
-  AspaIcon,  // Asegúrate de tener este icono o usa uno genérico
-  RocketIcon // Asegúrate de tener este icono o usa uno genérico
+  CreditIcon, 
+  AspaIcon, 
+  RocketIcon 
 } from "../assets/icons";
 
-// Si te faltan iconos, puedes usar estos SVGs simples inline:
+// Iconos SVGs simples inline (se mantienen igual que en tu código original):
 const BuildingIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path d="M10.707 2.293a1 1 0 00-1.414 0l-7 7a1 1 0 001.414 1.414L4 10.414V17a1 1 0 001 1h2a1 1 0 001-1v-2a1 1 0 011-1h2a1 1 0 011 1v2a1 1 0 001 1h2a1 1 0 001-1v-6.586l.293.293a1 1 0 001.414-1.414l-7-7z" /></svg>;
 const CashIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M4 4a2 2 0 00-2 2v4a2 2 0 002 2V6h10a2 2 0 00-2-2H4zm2 6a2 2 0 012-2h8a2 2 0 012 2v4a2 2 0 01-2 2H8a2 2 0 01-2-2v-4zm6 4a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" /></svg>;
 const PercentIcon = () => <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M5 2a1 1 0 011 1v1h1a1 1 0 010 2H6v1a1 1 0 01-2 0V6H3a1 1 0 010-2h1V3a1 1 0 011-1zm0 10a1 1 0 011 1v1h1a1 1 0 110 2H6v1a1 1 0 11-2 0v-1H3a1 1 0 110-2h1v-1a1 1 0 011-1zM12 2a1 1 0 01.967.744L14.146 7.2 17.5 9.134a1 1 0 010 1.732l-3.354 1.935-1.18 4.455a1 1 0 01-1.933 0L9.854 12.8 6.5 10.866a1 1 0 010-1.732l3.354-1.935 1.18-4.455A1 1 0 0112 2z" clipRule="evenodd" /></svg>;
 
 export default function SimulacionDetailsModal({ isOpen, onClose, simulation }) {
+  // 2. Inicializamos el hook
+  const navigate = useNavigate();
+
   if (!isOpen || !simulation) return null;
 
   const formatCurrency = (amount) => {
@@ -22,6 +28,46 @@ export default function SimulacionDetailsModal({ isOpen, onClose, simulation }) 
       currency: currency,
       minimumFractionDigits: 2,
     }).format(amount);
+  };
+
+  // 3. Función para manejar la redirección
+  const handleRecalculate = () => {
+    // Primero cerramos el modal
+    onClose();
+    
+    // Navegamos a la ruta del simulador pasando los datos en el state
+    // IMPORTANTE: Asegúrate de que la ruta "/simulador" coincida con tu Router
+    navigate("/simulador", { 
+      state: { 
+        datosPrevios: simulation 
+      } 
+    });
+  };
+
+  const formatPlazo = () => {
+      // Si tenemos totalPagos, asumimos que son los meses totales (frecuencia mensual)
+      const mesesTotales = simulation.totalPagos; 
+      
+      if (!mesesTotales) return `${simulation.plazoAnios} Años`;
+
+      const anios = Math.floor(mesesTotales / 12);
+      const mesesRestantes = mesesTotales % 12;
+
+      let texto = "";
+      
+      if (anios > 0) {
+          texto += `${anios} Año${anios !== 1 ? 's' : ''}`;
+      }
+      
+      if (mesesRestantes > 0) {
+          if (anios > 0) texto += " y ";
+          texto += `${mesesRestantes} Mes${mesesRestantes !== 1 ? 'es' : ''}`;
+      }
+
+      // Si es menos de 1 mes (raro), mostrar días o 0
+      if (texto === "") return "Menos de 1 mes";
+
+      return texto;
   };
 
   return (
@@ -107,8 +153,14 @@ export default function SimulacionDetailsModal({ isOpen, onClose, simulation }) 
               </h4>
 
               <div className="flex justify-between items-center">
-                <span className="text-gray-600 text-sm">Plazo</span>
-                <span className="font-bold text-gray-800">{simulation.plazoAnios} Años <span className="text-gray-400 font-normal">({simulation.totalPagos} cuotas)</span></span>
+                  <span className="text-gray-600 text-sm">Plazo</span>
+                  <span className="font-bold text-gray-800">
+                      {/* Usamos la función formatPlazo aquí */}
+                      {formatPlazo()} 
+                      <span className="text-gray-400 font-normal ml-1">
+                          ({simulation.totalPagos} cuotas)
+                      </span>
+                  </span>
               </div>
 
               <div className="flex justify-between items-center">
@@ -156,7 +208,7 @@ export default function SimulacionDetailsModal({ isOpen, onClose, simulation }) 
           </button>
           <button 
             className="flex-1 py-3 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700 shadow-lg shadow-blue-200 transition-all flex items-center justify-center gap-2"
-            onClick={() => alert("Funcionalidad para re-cargar estos datos en el simulador pendiente.")}
+            onClick={handleRecalculate}
           >
             <ChartIcon width={20} height={20} stroke="white" />
             Recalcular

@@ -10,15 +10,23 @@ export default function Simulador({ user, token, view, users }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
-  // --- NUEVO ESTADO: Para guardar los inputs de la simulación actual ---
+  // --- ESTADO: Para guardar los inputs de la simulación actual ---
   const [currentSimulationParams, setCurrentSimulationParams] = useState(null);
   
-  // --- NUEVO ESTADO: Loading del guardado ---
+  // --- ESTADO: Loading del guardado ---
   const [saving, setSaving] = useState(false);
 
-  // 2. CAPTURAR LOS DATOS DE LA PROPIEDAD (SI EXISTEN)
+  // 1. CAPTURAR LOS DATOS DE NAVEGACIÓN
   const location = useLocation();
+  
+  // Caso A: Viene desde "Ver Propiedad" en el listado de casas
   const propertyFromNavigation = location.state?.propertyData;
+  
+  // Caso B: Viene desde "Recalcular" en el Modal de historial
+  const simulationFromModal = location.state?.datosPrevios;
+
+  // 2. DETERMINAR LA DATA INICIAL (Prioridad al Recálculo)
+  const initialFormData = simulationFromModal || propertyFromNavigation;
 
   const simulateCredit = async (payload) => {
     try {
@@ -51,31 +59,35 @@ export default function Simulador({ user, token, view, users }) {
     }
   };
 
-    const handleSaveSimulation = async () => {
-        if (!result || !currentSimulationParams) return;
+const handleSaveSimulation = async () => {
+    if (!result || !currentSimulationParams) return;
 
-        try {
-          setSaving(true);
+    try {
+      setSaving(true);
 
-          const primeraFilaPago = result.tabla_amortizacion.find(fila => fila.periodo === 1);
-          const cuotaParaGuardar = primeraFilaPago ? primeraFilaPago.cuota_total : 0;
+      const primeraFilaPago = result.tabla_amortizacion.find(fila => fila.periodo === 1);
+      const cuotaParaGuardar = primeraFilaPago ? primeraFilaPago.cuota_total : 0;
 
-          const savePayload = {
-            nombre_producto_credito: currentSimulationParams.entidad_financiera || "Crédito Personalizado",
-            // Si viene de una propiedad, usamos su ID, sino null
-            id_unidad: currentSimulationParams.id_unidad || null, 
-            // Si viene de una propiedad, usamos su tipo (ej: Casa), sino "Propiedad"
-            concepto_temporal: currentSimulationParams.concepto_temporal || "Propiedad", 
-            
-            moneda: currentSimulationParams.moneda,
-            valor_inmueble: parseFloat(currentSimulationParams.valor_inmueble),
-            cuota_inicial: parseFloat(currentSimulationParams.valor_inmueble) * (parseFloat(currentSimulationParams.porcentaje_inicial) / 100),
-            monto_financiado: parseFloat(currentSimulationParams.monto) - parseFloat(currentSimulationParams.bono_techo_propio || 0),
-            plazo_anios: Math.ceil(parseInt(currentSimulationParams.plazo_meses) / 12),
-            tasa_interes_aplicada: parseFloat(result.tasa_efectiva_periodo),
-            cuota_mensual_estimada: parseFloat(cuotaParaGuardar),
-            total_pagado: parseFloat(result.total_pagado)
-          };
+      const savePayload = {
+        nombre_producto_credito: currentSimulationParams.entidad_financiera || "Crédito Personalizado",
+        id_unidad: currentSimulationParams.id_unidad || null, 
+        concepto_temporal: currentSimulationParams.concepto_temporal || "Propiedad", 
+        
+        moneda: currentSimulationParams.moneda,
+        valor_inmueble: parseFloat(currentSimulationParams.valor_inmueble),
+        cuota_inicial: parseFloat(currentSimulationParams.valor_inmueble) * (parseFloat(currentSimulationParams.porcentaje_inicial) / 100),
+        monto_financiado: parseFloat(currentSimulationParams.monto) - parseFloat(currentSimulationParams.bono_techo_propio || 0),
+        
+        // Asegúrate de usar la corrección de decimales que hicimos antes:
+        plazo_anios: parseFloat((parseInt(currentSimulationParams.plazo_meses) / 12).toFixed(2)),
+        
+        tasa_interes_aplicada: parseFloat(result.tasa_efectiva_periodo),
+        cuota_mensual_estimada: parseFloat(cuotaParaGuardar),
+        total_pagado: parseFloat(result.total_pagado),
+
+        // Esto guarda el estado EXACTO del formulario (seguros, bonos, checkeos, etc.)
+        datos_input: currentSimulationParams 
+      };
 
       const res = await fetch("http://localhost:8000/api/simulations/", {
         method: "POST",
@@ -111,10 +123,13 @@ export default function Simulador({ user, token, view, users }) {
                 Simulador de Créditos Hipotecarios
               </h2>
               
-              {/* MENSAJE OPCIONAL: Avisar al usuario que está simulando una propiedad específica */}
-              {propertyFromNavigation && (
-                 <div className="bg-blue-100 text-blue-800 px-4 py-2 rounded-lg inline-block mb-2 font-medium animate-fade-in-up">
-                    🏡 Simulando para: {propertyFromNavigation.address}
+              {/* MENSAJE DINÁMICO: Avisar origen de los datos */}
+              {(propertyFromNavigation || simulationFromModal) && (
+                 <div className="bg-blue-100 text-blue-800 px-4 py-2 rounded-lg inline-block mb-2 font-medium animate-fade-in-up border border-blue-200 shadow-sm">
+                   {propertyFromNavigation 
+                      ? `🏡 Simulando para propiedad: ${propertyFromNavigation.address}`
+                      : `🔄 Recargando datos de simulación previa: ${simulationFromModal.concepto || 'Sin título'}`
+                   }
                  </div>
               )}
 
@@ -131,11 +146,11 @@ export default function Simulador({ user, token, view, users }) {
 
             <div className="grid lg:grid-cols-6 gap-6">
               <div className="lg:col-span-2">
-                {/* 3. PASAR LOS DATOS AL FORMULARIO */}
+                {/* 3. PASAR LOS DATOS COMBINADOS AL FORMULARIO */}
                 <CreditForm 
                   onSimulate={simulateCredit} 
                   loading={loading} 
-                  initialData={propertyFromNavigation} 
+                  initialData={initialFormData} 
                   user={user}
                   token={token}
                 />
@@ -156,14 +171,12 @@ export default function Simulador({ user, token, view, users }) {
                         saving={saving}
                     />
                     <AmortizationTable 
-                    tabla={result?.tabla_amortizacion} 
-                    frecuencia={result?.frecuencia_pago} 
-                    // AGREGAMOS ESTE OBJETO 'resumen'
+                      tabla={result?.tabla_amortizacion} 
+                      frecuencia={result?.frecuencia_pago} 
                       resumen={{
                           totalPagado: result.total_pagado,
                           totalIntereses: result.intereses_pagados,
-                      }}
-                                      
+                      }}                
                     />
                   </div>
                 ) : (

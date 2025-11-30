@@ -1,6 +1,7 @@
-import { useState, useEffect, useCallback } from "react"; // 1. IMPORTAR useCallback
+import { useState, useEffect, useCallback } from "react";
 import { Routes, Route, useNavigate, useLocation, Navigate } from "react-router-dom";
 
+// ... tus imports existentes ...
 import Home from "./Pages/Home";
 import Welcome from "./Pages/Welcome";
 import Simulador from "./Pages/Simulador";
@@ -9,6 +10,9 @@ import Navbar from "./Components/Navbar";
 import Oportunities from "./Pages/Oportunities"; 
 import Favoritos from "./Pages/Favoritos"; 
 import MiPerfil from "./Pages/MiPerfil"; 
+
+// 1. IMPORTAR EL COMPONENTE PROTECTED ROUTE
+import ProtectedRoute from "./Components/ProtectedRoute"; 
 
 export default function App() {
   const [token, setToken] = useState(null);
@@ -19,15 +23,12 @@ export default function App() {
   const location = useLocation();
   const LS_TOKEN = "tf_token";
 
-  // --- 1. RESTAURAR TOKEN AL INICIO ---
+  // --- 1. RESTAURAR TOKEN ---
   useEffect(() => {
     const storedToken = localStorage.getItem(LS_TOKEN);
-    if (storedToken) {
-        setToken(storedToken);
-    }
+    if (storedToken) setToken(storedToken);
   }, []);
 
-  // --- MANEJADOR DE LOGOUT (Lo defino antes para usarlo en reloadUser) ---
   const handleLogout = () => {
     setToken(null);
     setUser(null);
@@ -35,8 +36,6 @@ export default function App() {
     navigate("/"); 
   };
 
-  // --- 2. FUNCIÓN DE RECARGA DE USUARIO (NUEVO) ---
-  // Esta función se la pasaremos a MiPerfil para que la llame al guardar cambios
   const reloadUser = useCallback(async () => {
     if (!token) return;
     try {
@@ -52,21 +51,13 @@ export default function App() {
     }
   }, [token]);
 
-  // --- 3. USAR LA FUNCIÓN EN EL EFECTO INICIAL ---
   useEffect(() => {
     const initUser = async () => {
-        if (token) {
-           await reloadUser(); // Cargamos el usuario
-           // Redirección inicial si estamos en la raíz
-           if (location.pathname === "/") {
-              navigate("/welcome");
-           }
-        }
+        if (token) await reloadUser();
     };
     initUser();
-  }, [token, reloadUser]); // Dependencias actualizadas
+  }, [token, reloadUser]);
 
-  // --- MANEJADORES ---
   const handleLogin = (newToken) => {
     setToken(newToken);
     localStorage.setItem(LS_TOKEN, newToken);
@@ -75,6 +66,7 @@ export default function App() {
 
   const handleViewChange = (newView) => {
     setView(newView);
+    // ... tu switch de navegación ...
     switch (newView) {
         case "welcome": navigate("/welcome"); break;
         case "simulations": navigate("/mis-simulaciones"); break;
@@ -85,15 +77,9 @@ export default function App() {
     }
   };
 
-  const handleNavigateToSimulator = () => {
-    navigate("/simulador");
-  };
+  const handleNavigateToSimulator = () => navigate("/simulador");
 
-  // --- RENDERIZADO ---
-  if (!token) {
-    return <Home onLogin={handleLogin} />;
-  }
-
+  // --- 2. PANTALLA DE CARGA (Solo cuando hay token pero no user) ---
   if (token && !user) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-blue-50">
@@ -105,73 +91,65 @@ export default function App() {
     );
   }
 
+  // --- 3. RENDERIZADO CON RUTAS PROTEGIDAS ---
   return (
     <>
-      <Navbar user={user} view={view} onChangeView={handleViewChange} onLogout={handleLogout} />
+      {/* Navbar solo si hay usuario logueado */}
+      {user && <Navbar user={user} view={view} onChangeView={handleViewChange} onLogout={handleLogout} />}
 
       <Routes>
-        <Route path="/" element={<Navigate to="/welcome" />} />
-
-        <Route 
-            path="/welcome" 
-            element={
-                <Welcome 
-                    user={user} 
-                    token={token} 
-                    onNavigateToSimulator={handleNavigateToSimulator} 
-                />
-            } 
-        />
-
-        <Route 
-            path="/simulador" 
-            element={
-                <Simulador 
-                    user={user} 
-                    token={token} 
-                    view="tsa" 
-                    users={[]} 
-                />
-            } 
-        />
-
-        <Route 
-            path="/mis-simulaciones" 
-            element={
-                <MisSimulaciones 
-                    user={user} 
-                    token={token} 
-                    onNavigateToSimulator={handleNavigateToSimulator} 
-                />
-            } 
-        />
-
-        <Route path="/oportunidades" element={<Oportunities token={token} />} />
         
+        {/* === RUTA PÚBLICA (LOGIN) === */}
+        {/* Si ya tiene token y trata de ir al Home, lo mandamos a Welcome */}
         <Route 
-            path="/favoritos" 
-            element={
-                <Favoritos 
-                    user={user} 
-                    token={token} 
-                    onNavigateToSimulator={handleNavigateToSimulator} 
-                />
-            } 
+            path="/" 
+            element={!token ? <Home onLogin={handleLogin} /> : <Navigate to="/welcome" />} 
         />
 
-        {/* --- 4. AQUÍ PASAMOS LA PROP 'onProfileUpdate' --- */}
-        <Route 
-            path="/perfil" 
-            element={
-                <MiPerfil 
-                    user={user} 
-                    token={token} 
-                    onProfileUpdate={reloadUser} // <--- CLAVE PARA QUE SE ACTUALICE
-                />
-            } 
-        />
-        
-        <Route path="*" element={<Navigate to="/welcome" />} />
+        {/* === RUTAS PROTEGIDAS (Requieren Token) === */}
+        {/* Todo lo que esté aquí dentro requiere isAllowed={!!token} */}
+        <Route element={<ProtectedRoute isAllowed={!!token} />}>
+            
+            <Route 
+                path="/welcome" 
+                element={<Welcome user={user} token={token} onNavigateToSimulator={handleNavigateToSimulator} />} 
+            />
+
+            <Route 
+                path="/simulador" 
+                element={<Simulador user={user} token={token} view="tsa" users={[]} />} 
+            />
+
+            <Route 
+                path="/mis-simulaciones" 
+                element={<MisSimulaciones user={user} token={token} onNavigateToSimulator={handleNavigateToSimulator} />} 
+            />
+            
+            <Route 
+                path="/favoritos" 
+                element={<Favoritos user={user} token={token} onNavigateToSimulator={handleNavigateToSimulator} />} 
+            />
+
+            <Route 
+                path="/perfil" 
+                element={<MiPerfil user={user} token={token} onProfileUpdate={reloadUser} />} 
+            />
+
+        </Route> {/* Fin de Rutas Protegidas */}
+
+
+        {/* === BONUS: RUTA SOLO PARA ADMIN === */}
+        {/* Si quisiera una ruta que solo el admin pueda ver, se haría así: */}
+        <Route element={<ProtectedRoute isAllowed={!!token && user?.role === 'admin'} redirectTo="/welcome" />}>
+             {/* <Route path="/panel-admin" element={<AdminDashboard />} /> */}
+             {/*  LA PONEMOS AQUÍ: Ahora solo el admin puede entrar */}
+             <Route path="/oportunidades" element={<Oportunities token={token} />} />
+
+        </Route>
+
+        {/* Catch-all: Cualquier ruta desconocida */}
+        <Route path="*" element={<Navigate to={token ? "/welcome" : "/"} />} />
+
       </Routes>
     </>
   );

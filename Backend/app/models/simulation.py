@@ -1,9 +1,9 @@
-from sqlalchemy import Column, Integer, String, Float, DateTime, ForeignKey, Boolean
+# 1. AGREGAMOS 'JSON' A LAS IMPORTACIONES
+from sqlalchemy import Column, Integer, String, Float, DateTime, ForeignKey, Boolean, JSON
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.database import Base
 
-# CAMBIO DE NOMBRE: De SimulacionCredito a Simulacion
 class Simulacion(Base):
     __tablename__ = "simulaciones_credito"
 
@@ -22,12 +22,16 @@ class Simulacion(Base):
     valor_inmueble = Column(Float, nullable=False)
     cuota_inicial = Column(Float, nullable=False)
     monto_financiado = Column(Float, nullable=False)
-    plazo_anios = Column(Integer, nullable=False)
+    plazo_anios = Column(Float, nullable=False)
     tasa_interes_aplicada = Column(Float, nullable=False)
     cuota_mensual_estimada = Column(Float, nullable=False)
     total_pagado = Column(Float, nullable=False, default=0.0)
+
+    # 🔥 2. AGREGAMOS LA NUEVA COLUMNA AQUÍ
+    datos_input = Column(JSON, nullable=True)
+
     concepto_temporal = Column(String, default="Propiedad")
     is_active = Column(Boolean, default=True)
 
-    # Relación Inversa (Ahora apunta a "Client")
+    # Relación Inversa
     cliente = relationship("Client", back_populates="simulaciones")

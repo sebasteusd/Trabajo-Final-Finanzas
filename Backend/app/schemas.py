@@ -1,5 +1,5 @@
 from pydantic import BaseModel, EmailStr, Field
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 from datetime import date, datetime
 
 # ==========================================
@@ -213,10 +213,13 @@ class SimulationCreate(BaseModel):
     valor_inmueble: float
     cuota_inicial: float
     monto_financiado: float
-    plazo_anios: int
+    plazo_anios: float 
     tasa_interes_aplicada: float
     cuota_mensual_estimada: float
-    total_pagado: float # Agregado según requerimiento anterior
+    total_pagado: float
+    
+    # 🔥 NUEVO CAMPO: Aquí recibimos el JSON completo del formulario
+    datos_input: Optional[Dict[str, Any]] = None 
 
 class SimulationRead(BaseModel):
     id_simulacion: int
@@ -232,8 +235,11 @@ class SimulationRead(BaseModel):
     
     cuota_mensual_estimada: float
     total_pagado: float
-    plazo_anios: int
+    plazo_anios: float
     moneda: str
+    
+    # 🔥 NUEVO CAMPO: Aquí devolvemos el JSON al frontend
+    datos_input: Optional[Dict[str, Any]] = None 
 
     class Config:
         from_attributes = True

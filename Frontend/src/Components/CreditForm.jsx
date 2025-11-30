@@ -27,13 +27,12 @@ export default function CreditForm({ onSimulate, loading, initialData, user }) {
     concepto_temporal: "Propiedad"
   });
 
-  // --- ELEGIBILIDAD BONO TECHO PROPIO (Reglas simplificadas, mismas que el backend) ---
+  // --- ELEGIBILIDAD BONO TECHO PROPIO ---
   const MAX_INGRESOS_AVN = 3715.0;
   const [eligibility, setEligibility] = useState({ isEligible: null, reason: "" });
   const [applyBono, setApplyBono] = useState(false);
 
   useEffect(() => {
-    // Si no hay usuario o no tiene client, pedimos completar perfil
     const client = user?.client;
     if (!user || !client) {
       setEligibility({ isEligible: null, reason: "Completa tu perfil para evaluar la elegibilidad." });
@@ -67,22 +66,18 @@ export default function CreditForm({ onSimulate, loading, initialData, user }) {
     setEligibility({ isEligible: true, reason: "APTO. Cumples los requisitos para postular al Bono Techo Propio (AVN)." });
   }, [user]);
 
-  // Si no es elegible, forzamos bono a 0 para evitar modificaciones
-  // Fijar monto del bono: S/46,545 cuando es elegible, 0 en caso contrario
+  // Efecto para sincronizar el monto del bono cuando cambia la elegibilidad
   useEffect(() => {
     const MONTO_FIJO_BONO = 46545;
-    if (eligibility.isEligible === true) {
-      // por defecto activamos la casilla cuando el usuario es elegible
-      setApplyBono(true);
-      setForm(prev => ({ ...prev, bono_techo_propio: MONTO_FIJO_BONO }));
-    } else if (eligibility.isEligible === false) {
-      setApplyBono(false);
-      setForm(prev => ({ ...prev, bono_techo_propio: 0 }));
-    } else {
-      // perfil incompleto
+    // Solo reseteamos si NO estamos restaurando una simulación (applyBono manual tiene prioridad en restauración)
+    // Pero como applyBono es un estado reactivo, necesitamos tener cuidado.
+    // La lógica aquí asume comportamiento por defecto al cargar.
+    if (eligibility.isEligible === false) {
       setApplyBono(false);
       setForm(prev => ({ ...prev, bono_techo_propio: 0 }));
     }
+    // Nota: Si es eligible, no forzamos true automáticamente aquí para no sobrescribir 
+    // la restauración de datos si el usuario lo había desmarcado antes.
   }, [eligibility.isEligible]);
 
   const handleApplyBonoToggle = (e) => {
@@ -92,17 +87,81 @@ export default function CreditForm({ onSimulate, loading, initialData, user }) {
     setForm(prev => ({ ...prev, bono_techo_propio: checked ? MONTO_FIJO_BONO : 0 }));
   };
 
-  // --- AUTO-RELLENAR ---
+  // --- 🔥 AUTO-RELLENAR INTELIGENTE (ACTUALIZADO) ---
   useEffect(() => {
     if (initialData) {
+      console.log("Datos recibidos en CreditForm:", initialData);
+
+      // CASO A: RESTAURACIÓN COMPLETA (Viene de "Recalcular" con backup JSON)
+      if (initialData.datos_input) {
+        const saved = initialData.datos_input;
+        
+        console.log("Restaurando simulación desde backup...", saved);
+
+        setForm(prev => ({
+          ...prev, 
+          ...saved, // Sobrescribe el estado con el backup completo
+          
+          // Aseguramos tipos numéricos (parsear por si acaso)
+          valor_inmueble: parseFloat(saved.valor_inmueble),
+          porcentaje_inicial: parseFloat(saved.porcentaje_inicial),
+          monto: parseFloat(saved.monto),
+          bono_techo_propio: parseFloat(saved.bono_techo_propio || 0),
+          plazo_meses: parseInt(saved.plazo_meses),
+          tasa: parseFloat(saved.tasa),
+          pct_seguro_desgravamen_anual: parseFloat(saved.pct_seguro_desgravamen_anual),
+          seguro_bien_monto: parseFloat(saved.seguro_bien_monto),
+          portes_monto: parseFloat(saved.portes_monto),
+          
+          entidad_financiera: saved.entidad_financiera || "",
+          id_unidad: saved.id_unidad || null,
+          concepto_temporal: saved.concepto_temporal || "Propiedad"
+        }));
+
+        // Restaurar estado visual del Checkbox del Bono
+        if (parseFloat(saved.bono_techo_propio) > 0) {
+          setApplyBono(true);
+        } else {
+          setApplyBono(false);
+        }
+
+        return; // 🛑 DETENER AQUÍ. No usar la lógica de estimación de abajo.
+      }
+
+      // CASO B: ESTIMACIÓN INICIAL (Viene de "Ver Propiedad" o simulación antigua)
+      const valorRaw = initialData.valorInmueble || initialData.valor_inmueble || initialData.price || 0;
+      const valor = parseFloat(valorRaw);
+
+      let porcentajeCalc = 20; 
+      const cuotaInicialRaw = initialData.cuotaInicial || initialData.cuota_inicial;
+      
+      if (valor > 0 && cuotaInicialRaw) {
+         porcentajeCalc = (parseFloat(cuotaInicialRaw) / valor) * 100;
+      } else if (initialData.porcentaje_inicial) {
+         porcentajeCalc = parseFloat(initialData.porcentaje_inicial);
+      }
+
+      let mesesCalc = 240; 
+      if (initialData.plazo_meses) {
+        mesesCalc = parseInt(initialData.plazo_meses);
+      } else if (initialData.plazoAnios || initialData.plazo_anios) {
+        mesesCalc = parseInt(initialData.plazoAnios || initialData.plazo_anios) * 12;
+      }
+
       setForm(prev => ({
         ...prev,
-        valor_inmueble: parseFloat(initialData.price),
-        id_unidad: initialData.id,
-        concepto_temporal: initialData.type || "Propiedad",
+        valor_inmueble: valor,
+        porcentaje_inicial: parseFloat(porcentajeCalc.toFixed(2)),
+        plazo_meses: mesesCalc,
+        moneda: initialData.moneda || prev.moneda,
+        tasa: initialData.tasaInteres || initialData.tasa || prev.tasa, 
+        id_unidad: initialData.id_unidad || initialData.id || null,
+        concepto_temporal: initialData.concepto_temporal || initialData.concepto || initialData.type || "Propiedad",
+        entidad_financiera: initialData.entidad_financiera || initialData.nombre_producto_credito || ""
       }));
     }
   }, [initialData]);
+  // --------------------------------------------------------
 
   // --- CARGAR ENTIDADES ---
   useEffect(() => {
@@ -419,7 +478,7 @@ export default function CreditForm({ onSimulate, loading, initialData, user }) {
                  <span>{currencySymbol} {formatNumber(form.bono_techo_propio)}</span>
               </div>
 
-              {/* Mensaje de elegibilidad y control del input del bono */}
+              {/* Mensaje de elegibilidad */}
               <div className="mt-3">
                 {eligibility.isEligible === true && (
                   <div className="bg-green-50 border border-green-200 text-green-800 p-2 rounded">

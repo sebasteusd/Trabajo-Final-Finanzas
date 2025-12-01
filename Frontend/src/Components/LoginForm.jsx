@@ -3,7 +3,7 @@ import { useState } from "react";
 // 🔥 URL DINÁMICA: Si existe la variable de entorno (Nube), la usa. Si no, usa localhost.
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
-export default function LoginForm({ onLogin }) {
+export default function LoginForm({ onLogin, onSwitchToRecovery }) {
   const [form, setForm] = useState({ username: "", password: "" });
   const [error, setError] = useState("");
 
@@ -30,7 +30,7 @@ export default function LoginForm({ onLogin }) {
       if (!res.ok) throw new Error("Credenciales inválidas");
 
       const data = await res.json();
-      onLogin(data.access_token); 
+      onLogin(data.access_token);
     } catch (err) {
       setError(err.message);
     }
@@ -79,7 +79,17 @@ export default function LoginForm({ onLogin }) {
 
           {error && <p className="text-red-500 text-sm text-center">{error}</p>}
 
-          <div className="pt-4">
+          <div className="text-center text-sm">
+          <button
+            type="button" // CLAVE: para que no envíe el formulario de login
+            onClick={onSwitchToRecovery} // Llama a la función del padre
+            className="text-blue-600 hover:text-blue-800 transition duration-150 ease-in-out"
+          >
+            ¿Olvidaste tu contraseña?
+          </button>
+        </div>
+
+          <div className="pt-2">
             <button
               type="submit"
               className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-full transition duration-200 transform hover:scale-105"

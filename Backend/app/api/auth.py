@@ -24,31 +24,62 @@ from app.database import get_db
 router = APIRouter()
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/token")
 
-# 🔥 LECTURA DE URL PÚBLICA (Para subida de fotos)
 # Si está en Render, usará https://credifacil-api.onrender.com
 SERVER_URL = os.getenv("PUBLIC_HOST_URL", "http://localhost:8000")
 
 # ==========================================
-# ESQUEMA LOCAL (Para cambio de contraseña)
+# ESQUEMAS LOCALES (Para seguridad)
 # ==========================================
 class PasswordChangeRequest(BaseModel):
     current_password: str
     new_password: str
 
+class PasswordResetDirectRequest(BaseModel):
+    identifier: str # Puede ser username o email
+    new_password: str
+
 # ==========================================
-# FUNCIONES AUXILIARES (CREATE USER)
+# FUNCIONES AUXILIARES
 # ==========================================
 
 def get_user_by_username(db: Session, username: str):
     """Busca un usuario en la DB por nombre de usuario."""
     return db.query(UserModel).filter(UserModel.username == username).first()
 
+def get_user_by_identifier(db: Session, identifier: str):
+    """Busca un usuario en la DB por username o email."""
+    return db.query(UserModel).filter(
+        (UserModel.username == identifier) | (UserModel.email == identifier)
+    ).first()
+
+# 🚨 FUNCIÓN AUXILIAR PARA VERIFICAR UNICIDAD
+def check_user_uniqueness(db: Session, user: UserCreate):
+    """Verifica si el email, dni o telefono ya están registrados."""
+    if db.query(UserModel).filter(UserModel.email == user.email).first():
+        return "El Email ya está registrado."
+    if db.query(UserModel).filter(UserModel.dni == user.dni).first():
+        return "El DNI ya está registrado."
+    if db.query(UserModel).filter(UserModel.telefono == user.telefono).first():
+        return "El Teléfono ya está registrado."
+    return None # Si es único
+
 def create_user_with_client(db: Session, user: UserCreate, is_admin: bool = False):
     """
-    Crea un nuevo usuario Y su ficha de cliente vinculada.
+    Crea un nuevo usuario Y su ficha de cliente vinculada,
+    con validaciones de unicidad mejoradas.
     """
+    
+    # 🚨 1. VALIDACIÓN DE UNICIDAD EXPLÍCITA
+    uniqueness_error = check_user_uniqueness(db, user)
+    if uniqueness_error:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=uniqueness_error
+        )
+        
     hashed_password = hash_password(user.password)
     
+    # 2. Creación del modelo de usuario
     db_user = UserModel(
         username=user.username,
         email=user.email,
@@ -69,6 +100,7 @@ def create_user_with_client(db: Session, user: UserCreate, is_admin: bool = Fals
         db.commit()
         db.refresh(db_user) 
 
+        # 3. Creación del modelo de cliente
         new_client = ClientModel(
             user_id=db_user.id,
             ingresos_mensuales=user.ingresos_mensuales,
@@ -81,16 +113,17 @@ def create_user_with_client(db: Session, user: UserCreate, is_admin: bool = Fals
 
     except IntegrityError:
         db.rollback() 
+        # Si falla por una restricción de unicidad no cubierta, damos un error genérico.
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail="El usuario ya existe (DNI, Email o Username duplicado)."
+            detail="Error de unicidad: El nombre de usuario, DNI o Email ya existe."
         )
     except Exception as e:
         db.rollback()
         print(f"Error interno al registrar: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Error al crear el usuario."
+            detail="Error interno al crear el usuario."
         )
 
 # ==========================================
@@ -130,21 +163,44 @@ def login_for_access_token(
     }
 
 
+# --- Restablecimiento de Contraseña DIRECTO (Sin Login/Email) ---
+@router.post("/reset-password-direct", status_code=status.HTTP_200_OK)
+def reset_password_direct(
+    pass_data: PasswordResetDirectRequest,
+    db: Session = Depends(get_db)
+):
+    user = get_user_by_identifier(db, identifier=pass_data.identifier)
+
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, 
+            detail="Usuario no encontrado o datos inválidos."
+        )
+
+    new_hashed_password = hash_password(pass_data.new_password)
+    
+    user.password_hash = new_hashed_password
+    db.add(user)
+    db.commit()
+
+    return {"message": "Contraseña restablecida correctamente."}
+
+
 # --- Obtener usuario actual (Dependencia) ---
 def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)): 
     try:
         payload = decode_token(token)
         username = payload.get("sub")
- 
+    
         if not username:
-            raise HTTPException(status_code=401, detail="Token inválido")
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Token inválido") 
     except Exception:
-        raise HTTPException(status_code=401, detail="Token inválido o expirado")
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Token inválido o expirado")
 
     user = get_user_by_username(db, username=username)
     
     if not user or not user.is_active:
-        raise HTTPException(status_code=401, detail="Usuario inactivo o no existe")
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Usuario inactivo o no existe")
 
     return user 
 
@@ -183,7 +239,7 @@ def update_me(
     return current_user
 
 
-# --- SEGURIDAD: Cambiar Contraseña ---
+# --- SEGURIDAD: Cambiar Contraseña (REQUIERE LOGIN) ---
 @router.post("/change-password")
 def change_password(
     pass_data: PasswordChangeRequest,

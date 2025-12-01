@@ -1,17 +1,27 @@
 import { useState } from "react";
 import LoginForm from "../Components/LoginForm";
 import RegisterForm from "../Components/RegisterForm";
+import PasswordRecoveryForm from "../Components/PasswordRecoveryForm"; // <-- NUEVO COMPONENTE
 import Logo from "../assets/Logo.png";
 
 export default function LoginRegister({ onLogin, onBackToHome }) {
+  // Ahora gestiona 3 vistas: 'login', 'register', 'recovery'
   const [currentView, setCurrentView] = useState("login");
 
   const handleLogin = (token) => {
     onLogin(token);
   };
 
+  const switchToLogin = () => {
+    setCurrentView("login");
+  };
+
   const handleRegister = () => {
     setCurrentView("login");
+  };
+
+  const switchToRecovery = () => {
+    setCurrentView("recovery");
   };
 
   return (
@@ -43,34 +53,52 @@ export default function LoginRegister({ onLogin, onBackToHome }) {
 
       {/* Selector de vista */}
       <div className="container mx-auto py-8 px-4">
-        <div className="flex justify-center mb-8">
-          <div className="flex space-x-4">
-            <button
-              onClick={() => setCurrentView("login")}
-              className={`px-6 py-2 rounded-full font-semibold transition ${
-                currentView === "login"
-                  ? "bg-blue-600 text-white"
-                  : "bg-gray-200 text-gray-700 hover:bg-gray-300"
-              }`}
-            >
-              Iniciar Sesión
-            </button>
-            <button
-              onClick={() => setCurrentView("register")}
-              className={`px-6 py-2 rounded-full font-semibold transition ${
-                currentView === "register"
-                  ? "bg-blue-600 text-white"
-                  : "bg-gray-200 text-gray-700 hover:bg-gray-300"
-              }`}
-            >
-              Registrarse
-            </button>
+        {/* Oculta el selector si estamos en la vista de recuperación */}
+        {currentView !== "recovery" && (
+          <div className="flex justify-center mb-8">
+            <div className="flex space-x-4">
+              <button
+                onClick={switchToLogin}
+                className={`px-6 py-2 rounded-full font-semibold transition ${
+                  currentView === "login"
+                    ? "bg-blue-600 text-white"
+                    : "bg-gray-200 text-gray-700 hover:bg-gray-300"
+                }`}
+              >
+                Iniciar Sesión
+              </button>
+              <button
+                onClick={() => setCurrentView("register")}
+                className={`px-6 py-2 rounded-full font-semibold transition ${
+                  currentView === "register"
+                    ? "bg-blue-600 text-white"
+                    : "bg-gray-200 text-gray-700 hover:bg-gray-300"
+                }`}
+              >
+                Registrarse
+              </button>
+            </div>
           </div>
-        </div>
+        )}
 
-        {/* Formularios */}
-        {currentView === "login" && <LoginForm onLogin={handleLogin} />}
-        {currentView === "register" && <RegisterForm onRegister={handleRegister} />}
+        {/* Renderizado de Formularios */}
+        {currentView === "login" && (
+          <LoginForm 
+            onLogin={handleLogin} 
+            onSwitchToRecovery={switchToRecovery} // <-- NUEVO PROP
+          />
+        )}
+        
+        {currentView === "register" && (
+          <RegisterForm onRegister={handleRegister} />
+        )}
+
+        {/* VISTA DE RECUPERACIÓN */}
+        {currentView === "recovery" && (
+          <PasswordRecoveryForm 
+            onClose={switchToLogin} // Vuelve a la vista de login
+          />
+        )}
 
         {/* CTA inferior */}
         {currentView === "register" && (
@@ -78,7 +106,7 @@ export default function LoginRegister({ onLogin, onBackToHome }) {
             <p className="text-gray-600">
               ¿Ya tienes una cuenta?{" "}
               <button
-                onClick={() => setCurrentView("login")}
+                onClick={switchToLogin}
                 className="text-blue-600 hover:underline font-semibold"
               >
                 Inicia Sesión

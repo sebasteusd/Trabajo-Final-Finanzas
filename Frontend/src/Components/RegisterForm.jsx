@@ -1,10 +1,9 @@
 import { useState, useEffect, useRef } from "react";
-// 1. IMPORTAR LA LIBRERÍA
 import ReCAPTCHA from "react-google-recaptcha";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
-// --- LISTA DE DISTRITOS (Para normalizar la data del Scoring) ---
+// --- LISTA DE DISTRITOS ---
 const DISTRITOS_LIMA_CALLAO = [
   "Ancón", "Ate", "Barranco", "Breña", "Carabayllo", "Cercado de Lima", "Chaclacayo", 
   "Chorrillos", "Cieneguilla", "Comas", "El Agustino", "Independencia", "Jesús María", 
@@ -36,6 +35,55 @@ const EyeSlashIcon = () => (
   </svg>
 );
 
+// FUNCIÓN AUXILIAR DE VALIDACIÓN DE EDAD
+const isOver18 = (birthDateString) => {
+    if (!birthDateString) return false;
+    const today = new Date();
+    const birthDate = new Date(birthDateString);
+    let age = today.getFullYear() - birthDate.getFullYear();
+    const m = today.getMonth() - birthDate.getMonth();
+    if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
+        age--;
+    }
+    return age >= 18;
+};
+
+
+// ------------------------------------------
+// COMPONENTE MODAL DE ÉXITO
+// ------------------------------------------
+const SuccessModal = ({ isVisible, onClose }) => {
+    if (!isVisible) return null;
+
+    return (
+        <div 
+            className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50 transition-opacity duration-300"
+            onClick={onClose} 
+        >
+            <div 
+                className="bg-white rounded-xl shadow-2xl p-8 max-w-sm w-full transform transition-all duration-300 scale-100"
+                onClick={e => e.stopPropagation()} 
+            >
+                <div className="text-center">
+                    <svg className="w-16 h-16 text-green-500 mx-auto mb-4 animate-bounce-slow" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    <h3 className="text-2xl font-bold text-gray-800 mb-2">¡Registro Exitoso! 🎉</h3>
+                    <p className="text-gray-600 mb-6">Tu cuenta ha sido creada. Serás redirigido al inicio de sesión.</p>
+                    <button
+                        onClick={onClose}
+                        className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-lg transition duration-200"
+                    >
+                        Ir a Iniciar Sesión
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+};
+// ------------------------------------------
+
+
 export default function RegisterForm({ onRegister }) {
   const [form, setForm] = useState({
     username: "",
@@ -47,26 +95,21 @@ export default function RegisterForm({ onRegister }) {
     fecha_nacimiento: "",
     telefono: "",
     email: "",
-    // CAMBIO: Separamos dirección en dos campos para el formulario
     distrito: "",
     direccion_exacta: "",
-    
     ingresos_mensuales: "",
     consentimiento_datos: false,
   });
 
   const [error, setError] = useState("");
-  const [success, setSuccess] = useState("");
+  const [showModal, setShowModal] = useState(false); 
   
-  // --- ESTADOS DE SEGURIDAD ---
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   
-  // 2. ESTADO PARA EL CAPTCHA
   const [captchaValido, setCaptchaValido] = useState(null); 
   const captchaRef = useRef(null); 
 
-  // --- ESTADOS PARA VALIDACIÓN ---
   const [passwordStrength, setPasswordStrength] = useState(0);
   const [passwordCriteria, setPasswordCriteria] = useState({
     length: false, upper: false, lower: false, number: false, special: false
@@ -100,7 +143,6 @@ export default function RegisterForm({ onRegister }) {
     return "Muy Segura";
   };
 
-  // 3. HANDLER DEL CAPTCHA
   const handleCaptchaChange = (value) => {
     setCaptchaValido(value); 
   };
@@ -109,13 +151,26 @@ export default function RegisterForm({ onRegister }) {
     const { name, value, type, checked } = e.target;
     setForm({ ...form, [name]: type === "checkbox" ? checked : value });
   };
+  
+  // FUNCIÓN PARA MANEJAR DNI (8 dígitos) Y TELÉFONO (9 dígitos)
+  const handleNumberChange = (e) => {
+      const { name, value } = e.target;
+      
+      const onlyNumbers = value.replace(/[^0-9]/g, '');
+      const maxLength = name === 'dni' ? 8 : 9;
+
+      setForm({ ...form, [name]: onlyNumbers.slice(0, maxLength) });
+  };
+
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
-    setSuccess("");
 
-    // VALIDACIONES
+    // VALIDACIONES FRONTEND (Longitud y edad)
+    const DNI_LENGTH = 8;
+    const TEL_LENGTH = 9;
+
     if (!captchaValido) {
         setError("Por favor completa el CAPTCHA para continuar.");
         return;
@@ -131,8 +186,23 @@ export default function RegisterForm({ onRegister }) {
       return;
     }
 
+    if (!isOver18(form.fecha_nacimiento)) {
+        setError("Debes ser mayor de 18 años para registrarte.");
+        return;
+    }
+    
+    if (form.dni.length !== DNI_LENGTH) {
+        setError(`El DNI debe tener exactamente ${DNI_LENGTH} dígitos.`);
+        return;
+    }
+    
+    if (form.telefono.length !== TEL_LENGTH) {
+        setError(`El Teléfono debe tener exactamente ${TEL_LENGTH} dígitos.`);
+        return;
+    }
+    // ------------------------------------
+
     try {
-      // PREPARAR DATOS: Unimos distrito y dirección
       const direccionFinal = `${form.distrito} - ${form.direccion_exacta}`;
 
       const res = await fetch(`${API_URL}/api/auth/register`, {
@@ -147,7 +217,6 @@ export default function RegisterForm({ onRegister }) {
           fecha_nacimiento: form.fecha_nacimiento,
           telefono: form.telefono,
           email: form.email,
-          // Enviamos la dirección combinada
           direccion: direccionFinal,
           ingresos_mensuales: parseFloat(form.ingresos_mensuales) || 0,
           consentimiento_datos: form.consentimiento_datos,
@@ -156,10 +225,11 @@ export default function RegisterForm({ onRegister }) {
 
       if (!res.ok) {
         const errData = await res.json();
+        // Captura los errores de unicidad del backend (DNI/Email/Teléfono duplicados)
         throw new Error(errData.detail || "Error al registrar usuario");
       }
 
-      setSuccess("Usuario registrado correctamente.");
+      // Limpiar formulario y estados de seguridad
       setForm({
         username: "", password: "", confirmPassword: "", nombre: "", apellido: "",
         dni: "", fecha_nacimiento: "", telefono: "", email: "", 
@@ -170,12 +240,20 @@ export default function RegisterForm({ onRegister }) {
       setCaptchaValido(null);
       captchaRef.current.reset();
 
-      if (onRegister) onRegister();
+      // Mostrar el modal de éxito
+      setShowModal(true); 
+
     } catch (err) {
       setError(err.message);
       setCaptchaValido(null);
       if(captchaRef.current) captchaRef.current.reset();
     }
+  };
+
+  // Función para cerrar el modal y redirigir
+  const handleCloseModal = () => {
+    setShowModal(false);
+    if (onRegister) onRegister(); // Redirige a la vista de login
   };
 
   return (
@@ -200,9 +278,47 @@ export default function RegisterForm({ onRegister }) {
             {/* DATOS PERSONALES */}
             <div><label className="block text-sm font-medium text-gray-700 mb-2">Nombres:</label><input name="nombre" type="text" placeholder="Tus nombres" value={form.nombre} onChange={handleChange} required className="w-full border border-gray-300 rounded-xl px-4 py-3 bg-gray-50 focus:ring-2 focus:ring-blue-500 outline-none transition-all" /></div>
             <div><label className="block text-sm font-medium text-gray-700 mb-2">Apellidos:</label><input name="apellido" type="text" placeholder="Tus apellidos" value={form.apellido} onChange={handleChange} required className="w-full border border-gray-300 rounded-xl px-4 py-3 bg-gray-50 focus:ring-2 focus:ring-blue-500 outline-none transition-all" /></div>
-            <div><label className="block text-sm font-medium text-gray-700 mb-2">DNI:</label><input name="dni" type="text" placeholder="8 dígitos" value={form.dni} onChange={handleChange} required className="w-full border border-gray-300 rounded-xl px-4 py-3 bg-gray-50 focus:ring-2 focus:ring-blue-500 outline-none transition-all" /></div>
-            <div><label className="block text-sm font-medium text-gray-700 mb-2">Teléfono:</label><input name="telefono" type="text" placeholder="Celular" value={form.telefono} onChange={handleChange} required className="w-full border border-gray-300 rounded-xl px-4 py-3 bg-gray-50 focus:ring-2 focus:ring-blue-500 outline-none transition-all" /></div>
-            <div><label className="block text-sm font-medium text-gray-700 mb-2">Fecha Nacimiento:</label><input name="fecha_nacimiento" type="date" value={form.fecha_nacimiento} onChange={handleChange} required className="w-full border border-gray-300 rounded-xl px-4 py-3 bg-gray-50 focus:ring-2 focus:ring-blue-500 outline-none transition-all" /></div>
+            
+            {/* CAMPO DNI */}
+            <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">DNI (8 dígitos):</label>
+                <input 
+                    name="dni" 
+                    type="tel" 
+                    inputMode="numeric"
+                    placeholder="8 dígitos" 
+                    value={form.dni} 
+                    onChange={handleNumberChange} 
+                    required 
+                    maxLength={8}
+                    className="w-full border border-gray-300 rounded-xl px-4 py-3 bg-gray-50 focus:ring-2 focus:ring-blue-500 outline-none transition-all" 
+                />
+            </div>
+            
+            {/* CAMPO TELÉFONO */}
+            <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Teléfono (9 dígitos):</label>
+                <input 
+                    name="telefono" 
+                    type="tel" 
+                    inputMode="numeric"
+                    placeholder="9 dígitos" 
+                    value={form.telefono} 
+                    onChange={handleNumberChange} 
+                    required 
+                    maxLength={9}
+                    className="w-full border border-gray-300 rounded-xl px-4 py-3 bg-gray-50 focus:ring-2 focus:ring-blue-500 outline-none transition-all" 
+                />
+            </div>
+
+            {/* CAMPO FECHA NACIMIENTO */}
+            <div className="relative">
+                <label className="block text-sm font-medium text-gray-700 mb-2">Fecha Nacimiento:</label>
+                <input name="fecha_nacimiento" type="date" value={form.fecha_nacimiento} onChange={handleChange} required className="w-full border border-gray-300 rounded-xl px-4 py-3 bg-gray-50 focus:ring-2 focus:ring-blue-500 outline-none transition-all" />
+                {form.fecha_nacimiento && !isOver18(form.fecha_nacimiento) && (
+                    <p className="text-xs text-red-500 absolute bottom-[-20px] left-0">Debes ser mayor de 18 años.</p>
+                )}
+            </div>
             
             {/* --- SECCIÓN DE DIRECCIÓN MEJORADA --- */}
             <div>
@@ -286,23 +402,20 @@ export default function RegisterForm({ onRegister }) {
 
           {/* 4. AQUÍ ESTÁ EL CAPTCHA */}
           <div className="flex justify-center my-4">
-             <ReCAPTCHA
-                ref={captchaRef}
-                // CLAVE DE PRUEBA DE GOOGLE (Funciona en localhost siempre)
-                // Cuando subas a producción, cámbiala por la tuya.
-                sitekey="6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI"
-                onChange={handleCaptchaChange}
-             />
+               <ReCAPTCHA
+                 ref={captchaRef}
+                 sitekey="6LeIxAcTAAAAAJcZVRqyHh71UMIEGNQ_MXjiZKhI"
+                 onChange={handleCaptchaChange}
+               />
           </div>
 
           {error && <div className="bg-red-50 border-l-4 border-red-500 text-red-700 p-4 rounded"><p className="font-bold">Error</p><p>{error}</p></div>}
-          {success && <div className="bg-green-50 border-l-4 border-green-500 text-green-700 p-4 rounded"><p className="font-bold">¡Éxito!</p><p>{success}</p></div>}
-
+          
           <button 
             type="submit" 
-            disabled={passwordStrength < 80 || !captchaValido} 
+            disabled={passwordStrength < 80 || !captchaValido || !isOver18(form.fecha_nacimiento) || form.dni.length !== 8 || form.telefono.length !== 9} 
             className={`w-full font-bold py-4 rounded-xl transition duration-200 transform hover:scale-[1.01] shadow-lg text-lg
-                ${passwordStrength < 80 || !captchaValido
+                ${passwordStrength < 80 || !captchaValido || !isOver18(form.fecha_nacimiento) || form.dni.length !== 8 || form.telefono.length !== 9
                     ? 'bg-gray-300 text-gray-500 cursor-not-allowed' 
                     : 'bg-gradient-to-r from-blue-600 to-indigo-700 hover:from-blue-700 hover:to-indigo-800 text-white'
                 }`}
@@ -311,6 +424,10 @@ export default function RegisterForm({ onRegister }) {
           </button>
         </form>
       </div>
+
+      {/* RENDERIZADO DEL MODAL */}
+      <SuccessModal isVisible={showModal} onClose={handleCloseModal} />
+
     </div>
   );
 }

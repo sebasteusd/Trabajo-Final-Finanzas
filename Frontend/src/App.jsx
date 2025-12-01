@@ -14,8 +14,11 @@ import Ayuda from "./Pages/Ayuda";
 
 // --- COMPONENTES GLOBALES ---
 import ProtectedRoute from "./Components/ProtectedRoute"; 
-import Footer from "./Components/Footer"; // Footer Global
-import ChatbotWidget from "./Components/ChatbotWidget"; // Chatbot (Si decides mantenerlo)
+import Footer from "./Components/Footer"; 
+import ChatbotWidget from "./Components/ChatbotWidget"; 
+
+// 🔥 URL DINÁMICA (Vital para Producción en Render)
+const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
 export default function App() {
   const [token, setToken] = useState(null);
@@ -39,12 +42,15 @@ export default function App() {
     navigate("/"); 
   };
 
+  // --- 2. RECARGAR USUARIO (Corregido con API_URL) ---
   const reloadUser = useCallback(async () => {
     if (!token) return;
     try {
-      const res = await fetch("http://localhost:8000/api/auth/me", {
+      // 🔥 USAMOS LA URL DINÁMICA AQUÍ
+      const res = await fetch(`${API_URL}/api/auth/me`, {
         headers: { Authorization: `Bearer ${token}` },
       });
+      
       if (!res.ok) throw new Error("Error al obtener usuario");
       const data = await res.json();
       setUser(data.usuario);
@@ -81,7 +87,7 @@ export default function App() {
 
   const handleNavigateToSimulator = () => navigate("/simulador");
 
-  // --- 2. PANTALLA DE CARGA ---
+  // --- 3. PANTALLA DE CARGA ---
   if (token && !user) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-blue-50">
@@ -93,7 +99,7 @@ export default function App() {
     );
   }
 
-  // --- 3. LAYOUT PRINCIPAL (Sticky Footer) ---
+  // --- 4. LAYOUT PRINCIPAL (Sticky Footer) ---
   return (
     <div className="min-h-screen flex flex-col font-['Poppins']">
       
@@ -158,7 +164,7 @@ export default function App() {
       {/* Footer Global (Siempre al final) */}
       <Footer />
 
-      {/* Chatbot Global (Opcional, si lo estás usando) */}
+      {/* Chatbot Global */}
       <ChatbotWidget user={user} />
       
     </div>

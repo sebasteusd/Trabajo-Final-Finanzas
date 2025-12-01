@@ -2,6 +2,8 @@ import { useState, useEffect, useRef } from "react";
 // 1. IMPORTAR LA LIBRERÍA
 import ReCAPTCHA from "react-google-recaptcha";
 
+const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
+
 // --- LISTA DE DISTRITOS (Para normalizar la data del Scoring) ---
 const DISTRITOS_LIMA_CALLAO = [
   "Ancón", "Ate", "Barranco", "Breña", "Carabayllo", "Cercado de Lima", "Chaclacayo", 
@@ -133,7 +135,7 @@ export default function RegisterForm({ onRegister }) {
       // PREPARAR DATOS: Unimos distrito y dirección
       const direccionFinal = `${form.distrito} - ${form.direccion_exacta}`;
 
-      const res = await fetch("http://localhost:8000/api/auth/register", {
+      const res = await fetch(`${API_URL}/api/auth/register`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

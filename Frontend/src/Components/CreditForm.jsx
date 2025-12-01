@@ -3,7 +3,7 @@ import { CreditIcon, RocketIcon, IdeaIcon } from "../assets/icons";
 // 1. IMPORTAR COMPONENTE TOOLTIP
 import Tooltip from "../Components/ToolTip";
 
-const API_URL = "http://localhost:8000"; 
+const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
 export default function CreditForm({ onSimulate, loading, initialData, user }) {
   const [entidades, setEntidades] = useState([]);

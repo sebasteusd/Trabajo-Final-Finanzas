@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { HeartIcon } from "../../assets/icons";
 
+const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
+
 export default function PropiedadCard({ property, formatPrice, onNavigateToSimulator, onClickDetails, token, initialIsFavorite = false }) {
   // Manejo seguro de la imagen
   const imageUrl = property.image || (property.images && property.images[0]) || (property.fotos && property.fotos[0]?.url_foto) || '';
@@ -22,7 +24,7 @@ export default function PropiedadCard({ property, formatPrice, onNavigateToSimul
 
     try {
         // CORRECCIÓN 3: Asegúrate de que la URL sea correcta (usamos property.id)
-        const res = await fetch(`http://localhost:8000/api/favorites/${property.id}`, {
+        const res = await fetch(`${API_URL}/api/favorites/${property.id}`, {
             method: "POST",
             headers: {
                 "Authorization": `Bearer ${token}`,

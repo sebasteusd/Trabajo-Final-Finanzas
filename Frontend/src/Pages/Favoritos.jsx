@@ -3,6 +3,8 @@ import { HomeIcon, ChartIcon } from "../assets/icons"; // Ajusta ruta si es nece
 import PropertyCard from "../Components/Cards/PropiedadCard.jsx"; 
 import PropertyDetailsModal from "../Components/PropertyDetailsModal.jsx"; // O la ruta donde lo tengas
 
+const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
+
 export default function Favoritos({ user, token, onNavigateToSimulator }) {
     const [properties, setProperties] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -24,7 +26,7 @@ export default function Favoritos({ user, token, onNavigateToSimulator }) {
             try {
                 setLoading(true);
                 // CAMBIO CLAVE: Llamamos al endpoint de favoritos, no al de todas las propiedades
-                const res = await fetch("http://localhost:8000/api/favorites/", {
+                const res = await fetch(`${API_URL}/api/favorites/`, {
                     headers: { "Authorization": `Bearer ${token}` }
                 });
 

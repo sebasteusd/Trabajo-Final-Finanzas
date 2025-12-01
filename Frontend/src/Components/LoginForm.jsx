@@ -1,5 +1,8 @@
 import { useState } from "react";
 
+// 🔥 URL DINÁMICA: Si existe la variable de entorno (Nube), la usa. Si no, usa localhost.
+const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
+
 export default function LoginForm({ onLogin }) {
   const [form, setForm] = useState({ username: "", password: "" });
   const [error, setError] = useState("");
@@ -13,12 +16,12 @@ export default function LoginForm({ onLogin }) {
     setError("");
 
     try {
-
       const body = new URLSearchParams();
       body.append("username", form.username);
       body.append("password", form.password);
 
-      const res = await fetch("http://localhost:8000/api/auth/token", {
+      // 🔥 USAMOS LA VARIABLE AQUÍ
+      const res = await fetch(`${API_URL}/api/auth/token`, {
         method: "POST",
         headers: { "Content-Type": "application/x-www-form-urlencoded" },
         body,

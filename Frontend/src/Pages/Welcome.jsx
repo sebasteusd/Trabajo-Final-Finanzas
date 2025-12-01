@@ -5,6 +5,10 @@ import PropertyCard from "../Components/Cards/PropiedadCard.jsx";
 import AddPropertyModal from "../Components/AddPropertyModal.jsx";
 import PropertyDetailsModal from "../Components/PropertyDetailsModal.jsx";
 
+
+const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
+
+
 export default function Welcome({ user, token, onNavigateToSimulator }) {
     const navigate = useNavigate();
     const [properties, setProperties] = useState([]);
@@ -47,8 +51,8 @@ export default function Welcome({ user, token, onNavigateToSimulator }) {
             try {
                 setLoading(true);
                 const [resProps, resFavs] = await Promise.all([
-                    fetch("http://localhost:8000/api/properties/", { headers: { "Authorization": `Bearer ${token}` } }),
-                    fetch("http://localhost:8000/api/favorites/", { headers: { "Authorization": `Bearer ${token}` } })
+                    fetch(`${API_URL}/api/properties/`, { headers: { "Authorization": `Bearer ${token}` } }),
+                    fetch(`${API_URL}/api/favorites/`, { headers: { "Authorization": `Bearer ${token}` } })
                 ]);
 
                 if (!resProps.ok) throw new Error("Error al cargar propiedades");
@@ -108,7 +112,7 @@ export default function Welcome({ user, token, onNavigateToSimulator }) {
                 fotos: newPropertyData.url_foto ? [{ url_foto: newPropertyData.url_foto }] : []
             };
 
-            const res = await fetch("http://localhost:8000/api/properties/", {
+            const res = await fetch(`${API_URL}/api/properties/`, {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",

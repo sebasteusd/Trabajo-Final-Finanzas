@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Body, UploadFile, File 
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
 from fastapi.security import OAuth2PasswordRequestForm, OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError 
@@ -7,13 +7,10 @@ from datetime import date
 import shutil
 import os
 import uuid
+
 # Modelos
-# En app/api/auth.py, agrega esto arriba con los otros imports de modelos:
-from app.models.simulation import Simulacion  # <--- Agrega esto
 from app.models.user import User as UserModel
 from app.models.client import Client as ClientModel
-
-# Esquemas
 from app.schemas import UserCreate, UserRead, TokenResponse, UserUpdate
 
 # Servicios y DB
@@ -27,6 +24,10 @@ from app.database import get_db
 router = APIRouter()
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/token")
 
+# 🔥 LECTURA DE URL PÚBLICA (Para subida de fotos)
+# Si está en Render, usará https://credifacil-api.onrender.com
+SERVER_URL = os.getenv("PUBLIC_HOST_URL", "http://localhost:8000")
+
 # ==========================================
 # ESQUEMA LOCAL (Para cambio de contraseña)
 # ==========================================
@@ -35,7 +36,7 @@ class PasswordChangeRequest(BaseModel):
     new_password: str
 
 # ==========================================
-# FUNCIONES AUXILIARES
+# FUNCIONES AUXILIARES (CREATE USER)
 # ==========================================
 
 def get_user_by_username(db: Session, username: str):
@@ -46,16 +47,14 @@ def create_user_with_client(db: Session, user: UserCreate, is_admin: bool = Fals
     """
     Crea un nuevo usuario Y su ficha de cliente vinculada.
     """
-    # 1. Hashear contraseña
     hashed_password = hash_password(user.password)
     
-    # 2. Preparar objeto Usuario (Datos Personales)
     db_user = UserModel(
         username=user.username,
         email=user.email,
         password_hash=hashed_password,
-        nombres=user.nombre,      # user.nombre viene del schema
-        apellidos=user.apellido,  # user.apellido viene del schema
+        nombres=user.nombre,
+        apellidos=user.apellido,
         dni=user.dni,
         fecha_nacimiento=user.fecha_nacimiento,
         telefono=user.telefono,
@@ -66,12 +65,10 @@ def create_user_with_client(db: Session, user: UserCreate, is_admin: bool = Fals
     )
 
     try:
-        # 3. Guardar Usuario
         db.add(db_user)
         db.commit()
         db.refresh(db_user) 
 
-        # 4. Crear ficha de Cliente vinculada (Datos Financieros)
         new_client = ClientModel(
             user_id=db_user.id,
             ingresos_mensuales=user.ingresos_mensuales,
@@ -113,16 +110,14 @@ def login_for_access_token(
     form_data: OAuth2PasswordRequestForm = Depends(), 
     db: Session = Depends(get_db)
 ):
-    # 1. Buscar usuario en la DB
     user = get_user_by_username(db, username=form_data.username)
     
     if not user or not verify_password(form_data.password, user.password_hash):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Credenciales inválidas")
 
     if not user.is_active:
-         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Usuario inactivo")
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Usuario inactivo")
 
-    # 2. Generar token
     access_token = create_access_token(
         subject=user.username,
         extra={"role": user.role, "user_id": user.id} 
@@ -146,10 +141,8 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
     except Exception:
         raise HTTPException(status_code=401, detail="Token inválido o expirado")
 
-    # 1. Buscamos el usuario en la DB
     user = get_user_by_username(db, username=username)
     
-    # 2. Validaciones
     if not user or not user.is_active:
         raise HTTPException(status_code=401, detail="Usuario inactivo o no existe")
 
@@ -163,16 +156,13 @@ def me(current_user=Depends(get_current_user)):
     return {"usuario": user_data}
 
 
-# --- PERFIL: Actualizar datos (NUEVO) ---
+# --- PERFIL: Actualizar datos ---
 @router.put("/me", response_model=UserRead)
 def update_me(
     user_update: UserUpdate, 
     db: Session = Depends(get_db), 
     current_user: UserModel = Depends(get_current_user)
 ):
-    """Actualiza los datos personales del usuario logueado."""
-    
-    # Excluimos los campos que no vienen en el request (unset)
     update_data = user_update.dict(exclude_unset=True)
 
     for key, value in update_data.items():
@@ -193,21 +183,18 @@ def update_me(
     return current_user
 
 
-# --- SEGURIDAD: Cambiar Contraseña (NUEVO) ---
+# --- SEGURIDAD: Cambiar Contraseña ---
 @router.post("/change-password")
 def change_password(
     pass_data: PasswordChangeRequest,
     db: Session = Depends(get_db),
     current_user: UserModel = Depends(get_current_user)
 ):
-    # 1. Verificar contraseña actual
     if not verify_password(pass_data.current_password, current_user.password_hash):
         raise HTTPException(status_code=400, detail="La contraseña actual es incorrecta.")
 
-    # 2. Hashear nueva contraseña
     new_hashed_password = hash_password(pass_data.new_password)
     
-    # 3. Guardar
     current_user.password_hash = new_hashed_password
     db.add(current_user)
     db.commit()
@@ -224,48 +211,23 @@ def list_users(current_user=Depends(get_current_user), db: Session = Depends(get
     users = db.query(UserModel).all()
     return users
 
-# --- INICIALIZACIÓN ADMIN (Al final para no estorbar) ---
-try:
-    with next(get_db()) as db:
-        if not get_user_by_username(db, username="admin"):
-            print("Inicializando usuario Admin...")
-            admin_data = UserCreate(
-                username="admin", 
-                password="admin123", 
-                nombre="Admin", 
-                apellido="System", 
-                dni="00000000", 
-                email="admin@credifacil.com", 
-                telefono="000000000", 
-                direccion="System HQ", 
-                fecha_nacimiento=date(2000, 1, 1), 
-                ingresos_mensuales=99999, 
-                consentimiento_datos=True
-            )
-            create_user_with_client(db, admin_data, is_admin=True)
-            print("--- Usuario 'admin' inicializado correctamente. ---")
-        else:
-            pass 
-except Exception as e:
-    print(f"⚠️ Aviso: Error al verificar/crear admin: {e}")
 
 # --- SUBIR FOTO DE PERFIL ---
 @router.post("/upload-avatar")
 def upload_avatar(
-    file: UploadFile = File(...), # Recibimos el archivo
+    file: UploadFile = File(...), 
     db: Session = Depends(get_db),
     current_user: UserModel = Depends(get_current_user)
 ):
-    # 1. Validar que sea imagen (básico)
+    # 1. Validar que sea imagen
     if not file.content_type.startswith("image/"):
         raise HTTPException(status_code=400, detail="El archivo debe ser una imagen")
 
-    # 2. Generar nombre único (ej: a1b2c3d4.png) para evitar duplicados
+    # 2. Generar nombre único
     extension = file.filename.split(".")[-1]
     filename = f"{uuid.uuid4()}.{extension}"
     
     # 3. Definir ruta de guardado
-    # Asegúrate que esta ruta coincida con la que creaste en main.py
     file_location = f"static/perfiles/{filename}" 
     
     # 4. Guardar el archivo en el disco
@@ -275,11 +237,8 @@ def upload_avatar(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error al guardar imagen: {e}")
 
-    # 5. Construir la URL pública
-    # Esta es la URL que guardaremos en la BD.
-    # Nota: En producción, cambia "http://localhost:8000" por tu dominio real.
-    server_url = "http://localhost:8000"
-    public_url = f"{server_url}/{file_location}"
+    # 5. Construir la URL pública (USANDO LA VARIABLE DINÁMICA)
+    public_url = f"{SERVER_URL}/{file_location}"
 
     # 6. Actualizar Usuario en BD
     current_user.foto_perfil = public_url
@@ -289,7 +248,6 @@ def upload_avatar(
 
     return {"url": public_url}
 
-# --- (Agregar al final de auth.py) ---
 
 def get_current_active_user(current_user: UserModel = Depends(get_current_user)):
     """

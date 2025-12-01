@@ -5,6 +5,8 @@ import Results from "../Components/Results";
 import AmortizationTable from "../Components/AmortizacionTable";
 import { ChartIcon } from "../assets/icons";
 
+const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
+
 export default function Simulador({ user, token, view, users }) {
   const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -32,7 +34,7 @@ export default function Simulador({ user, token, view, users }) {
     try {
       setLoading(true);
       setError(null);
-      const res = await fetch("http://localhost:8000/api/simulate", {
+      const res = await fetch(`${API_URL}/api/simulate`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -89,7 +91,7 @@ const handleSaveSimulation = async () => {
         datos_input: currentSimulationParams 
       };
 
-      const res = await fetch("http://localhost:8000/api/simulations/", {
+      const res = await fetch(`${API_URL}/api/simulations/`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

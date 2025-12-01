@@ -4,16 +4,19 @@ from fastapi.staticfiles import StaticFiles
 from contextlib import asynccontextmanager
 import os
 
-# --- Imports de Base de Datos ---
+# --- Imports de Base de Datos y Modelos ---
 from .database import engine, Base, SessionLocal
-
-# --- Imports de Modelos (Para que SQLAlchemy los registre) ---
+from app.models.user import User # Necesario para la función create_default_admin
 from app.models import user as user_models
 from app.models import client as client_models 
 from app.models import financial as financial_models
 from app.models import property as property_models
 from app.models import favorite as favorite_models
 from app.models import simulation as simulation_models 
+from app.models.user import User # Necesario para la función create_default_admin
+from app.models.client import Client # 🔥 AGREGAMOS ESTA IMPORTACIÓN
+# --- Imports de Servicios (Necesitamos el hasher) ---
+from app.services.auth import hash_password # 🔥 HASH DINÁMICO IMPORTADO
 
 # --- Imports de Routers ---
 from app.api import favorites
@@ -35,46 +38,71 @@ def create_tables():
     print("✅ Tablas creadas/verificadas.")
 
 # ===========================================
-# 2. FUNCIÓN: CREAR ADMIN POR DEFECTO
+# 2. FUNCIÓN: CREAR ADMIN POR DEFECTO (Seguro)
 # ===========================================
 def create_default_admin():
-    """Crea el usuario admin si no existe en la BD."""
-    from app.models.user import User
-    # Hash de "admin123" (Generado con bcrypt para evitar dependencias extra aquí)
-    HASH_ADMIN = "$2b$12$EixZaYVK1fsbw1ZfbX3OXePaWrn96pzvPnEyezRI.qKGyXv5Ju6o6"
+    """Crea el usuario admin y su perfil de cliente asociado si no existe en la BD."""
+    
+    from app.services.auth import hash_password
+    from app.models.user import User # Se asume importada en la parte superior
+    from app.models.client import Client # Se asume importada en la parte superior
     
     db = SessionLocal()
     try:
         admin = db.query(User).filter(User.username == "admin").first()
+        
         if not admin:
-            print("👤 Usuario admin no encontrado. Creando...")
+            print("👤 Usuario admin no encontrado. Creándolo...")
+            
+            password_plano = "admin123"
+            hashed_password = hash_password(password_plano)
+            
             new_admin = User(
                 username="admin",
                 email="admin@credifacil.com",
-                password_hash=HASH_ADMIN,
+                password_hash=hashed_password, 
                 nombres="Administrador",
                 apellidos="Sistema",
+                dni="00000000",
+                fecha_nacimiento="1990-01-01",
+                telefono="0000000000",
+                direccion="CrediFácil HQ",
                 role="admin",
                 is_active=True
             )
             db.add(new_admin)
             db.commit()
-            print("✅ Admin creado exitosamente: admin / admin123")
+            db.refresh(new_admin) # Necesario para obtener el new_admin.id
+
+            # 🔥🔥🔥 CREACIÓN DEL PERFIL DE CLIENTE ASOCIADO 🔥🔥🔥
+            new_client_profile = Client(
+                user_id=new_admin.id,
+                ingresos_mensuales=99999.00,
+                estado_seguimiento="EN PROCESO",
+                # Configuramos las declaraciones juradas a True para el admin de prueba:
+                no_propiedad_previa=True,
+                no_bono_previo=True 
+            )
+            db.add(new_client_profile)
+            db.commit()
+            
+            print(f"✅ Admin y perfil de cliente creado exitosamente.")
         else:
             print("✅ El usuario admin ya existe.")
+            
     except Exception as e:
-        print(f"⚠️ Error al verificar admin (puede ser normal en primer deploy): {e}")
+        print(f"⚠️ Error al verificar/crear admin: {e}")
     finally:
         db.close()
 
 # ===========================================
-# 3. LIFESPAN (Garantiza el orden de ejecución)
+# 3. LIFESPAN (Garantiza el orden de ejecución en el arranque)
 # ===========================================
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # --- AL INICIAR ---
-    create_tables()       # 1. Primero tablas
-    create_default_admin() # 2. Luego datos
+    create_tables()       
+    create_default_admin() 
     yield
     # --- AL APAGAR ---
     print("🛑 Servidor apagándose...")
@@ -84,7 +112,7 @@ async def lifespan(app: FastAPI):
 # ===========================================
 app = FastAPI(
     title="Simulador MiVivienda",
-    lifespan=lifespan # <--- AQUÍ SE CONECTA EL CICLO DE VIDA
+    lifespan=lifespan 
 )
 
 # Configuración de estáticos (Carpetas para fotos)

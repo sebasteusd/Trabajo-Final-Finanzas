@@ -4,7 +4,7 @@ import SimulacionCard from "../Components/Cards/SimulacionCard";
 import SimulacionDetailsModal from "../Components/SimulationDetailsModal";
 
 // Ajusta el puerto si es necesario
-const API_URL = "http://localhost:8000"; 
+const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
 export default function MisSimulaciones({ user, token, onNavigateToSimulator }) {
     const [simulaciones, setSimulaciones] = useState([]);

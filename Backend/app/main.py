@@ -6,17 +6,20 @@ import os
 
 # --- Imports de Base de Datos y Modelos ---
 from .database import engine, Base, SessionLocal
-from app.models.user import User # Necesario para la función create_default_admin
-from app.models import user as user_models
+from app.models.user import User
 from app.models import client as client_models 
 from app.models import financial as financial_models
 from app.models import property as property_models
 from app.models import favorite as favorite_models
 from app.models import simulation as simulation_models 
-from app.models.user import User # Necesario para la función create_default_admin
-from app.models.client import Client # 🔥 AGREGAMOS ESTA IMPORTACIÓN
+from app.models.client import Client 
 # --- Imports de Servicios (Necesitamos el hasher) ---
-from app.services.auth import hash_password # 🔥 HASH DINÁMICO IMPORTADO
+from app.services.auth import hash_password 
+
+# === 🔥 IMPORTACIÓN DEL SCRIPT DE POBIMIENTO (SEED) 🔥 ===
+from .init_data import seed_db 
+# =======================================================
+
 
 # --- Imports de Routers ---
 from app.api import favorites
@@ -29,7 +32,7 @@ from app.api.auth import router as auth_router
 from app.api import opportunities
 
 # ===========================================
-# 1. FUNCIÓN: CREAR TABLAS
+# 1. FUNCIÓN: CREAR TABLAS (MANTENER)
 # ===========================================
 def create_tables():
     """Crea todas las tablas definidas en los modelos."""
@@ -44,11 +47,12 @@ def create_default_admin():
     """Crea el usuario admin y su perfil de cliente asociado si no existe en la BD."""
     
     from app.services.auth import hash_password
-    from app.models.user import User # Se asume importada en la parte superior
-    from app.models.client import Client # Se asume importada en la parte superior
+    from app.models.user import User 
+    from app.models.client import Client
     
     db = SessionLocal()
     try:
+        # ... (Tu lógica existente para crear el admin) ...
         admin = db.query(User).filter(User.username == "admin").first()
         
         if not admin:
@@ -72,14 +76,13 @@ def create_default_admin():
             )
             db.add(new_admin)
             db.commit()
-            db.refresh(new_admin) # Necesario para obtener el new_admin.id
+            db.refresh(new_admin) 
 
-            # 🔥🔥🔥 CREACIÓN DEL PERFIL DE CLIENTE ASOCIADO 🔥🔥🔥
+            # CREACIÓN DEL PERFIL DE CLIENTE ASOCIADO
             new_client_profile = Client(
                 user_id=new_admin.id,
                 ingresos_mensuales=99999.00,
                 estado_seguimiento="EN PROCESO",
-                # Configuramos las declaraciones juradas a True para el admin de prueba:
                 no_propiedad_previa=True,
                 no_bono_previo=True 
             )
@@ -101,8 +104,18 @@ def create_default_admin():
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # --- AL INICIAR ---
-    create_tables()       
+    
+    # 1. Crear tablas (Si ya lo incluyes en seed_db, puedes omitir esta línea)
+    create_tables()
+    
+    # 2. Crear admin (Ejecución segura, solo si no existe)
     create_default_admin() 
+    
+    # === 🔥 3. POBLAR DATOS INICIALES (Entidades Financieras / Propiedades) 🔥 ===
+    print("--- Iniciando proceso de Seed de Datos Iniciales ---")
+    seed_db()
+    print("--- Finalizado Seed de Datos ---")
+    
     yield
     # --- AL APAGAR ---
     print("🛑 Servidor apagándose...")
@@ -115,14 +128,14 @@ app = FastAPI(
     lifespan=lifespan 
 )
 
-# Configuración de estáticos (Carpetas para fotos)
+# Configuración de estáticos
 os.makedirs("static/perfiles", exist_ok=True)
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
-# Configuración de CORS (Permitir conexiones del frontend)
+# Configuración de CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  
+    allow_origins=["*"], 
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

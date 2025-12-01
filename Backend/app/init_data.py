@@ -1,5 +1,5 @@
 from sqlalchemy.orm import Session
-from app.database import SessionLocal, engine
+from app.database import SessionLocal, engine, Base # Asegúrate de que Base esté importada desde app.database
 from app.models.financial import FinancialEntity
 from app.models.property import Property, PropertyPhoto
 
@@ -20,7 +20,7 @@ ENTIDADES = [
         "tasa_referencial": 0.0990,
         "gastos_administrativos": 10.00,
         "seguro_desgravamen": 0.00066, # ~0.066% mensual
-        "seguro_inmueble": 0.00026     # ~0.026% mensual
+        "seguro_inmueble": 0.00026      # ~0.026% mensual
     },
     {
         "nombre": "BBVA",
@@ -221,9 +221,18 @@ PROPIEDADES = [
     }
 ]
 
+# =============================================================
+# FUNCIÓN DE POBIMIENTO (ACTUALIZADA para crear tablas primero)
+# =============================================================
 def seed_db():
     db = SessionLocal()
     try:
+        # --- AÑADIDO: Creación de tablas si no existen ---
+        print("🛠️ Verificando y creando tablas...")
+        Base.metadata.create_all(bind=engine)
+        print("✅ Tablas verificadas/creadas.")
+        # ----------------------------------------------------
+
         # 1. Sembrando Entidades Financieras
         # Verificamos si la tabla está vacía para no duplicar en cada reinicio
         if db.query(FinancialEntity).count() == 0:
